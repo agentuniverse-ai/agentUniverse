@@ -291,6 +291,14 @@ class SemanticScholarTool(Tool):
         offset: int,
         filters: Dict[str, Any],
     ) -> Dict[str, Any]:
+        """Run a paper search request and return the validated result metadata and raw paper objects.
+
+        Args:
+            query: Free-text search terms.
+            max_results: Number of papers to request, between 1 and 20.
+            offset: Zero-based offset into the full result set.
+            filters: Normalized search filters produced by _normalize_search_filters.
+        """
         params = {
             "query": query,
             "limit": max_results,
@@ -309,6 +317,14 @@ class SemanticScholarTool(Tool):
         return {"total": total, "next_offset": next_offset, "papers": papers}
 
     def _lookup_paper(self, paper_id: str) -> Dict[str, Any]:
+        """Fetch a single paper by identifier and verify that it carries a paperId.
+
+        Args:
+            paper_id: Identifier of the paper to fetch.
+
+        Returns:
+            Raw paper object returned by the Semantic Scholar Graph API.
+        """
         data = self._request(
             f"/paper/{quote(paper_id, safe='')}",
             params={"fields": self.PAPER_FIELDS},
@@ -325,6 +341,15 @@ class SemanticScholarTool(Tool):
         offset: int,
         publication_date_or_year: str,
     ) -> Dict[str, Any]:
+        """Fetch a paper's citations or references and return them with pagination metadata.
+
+        Args:
+            paper_id: Identifier of the paper whose relations are fetched.
+            relation: Relation to fetch: citations or references.
+            max_results: Number of relations to request, between 1 and 20.
+            offset: Zero-based offset into the relation results.
+            publication_date_or_year: Date filter applied only when relation is citations.
+        """
         params = {"offset": offset, "limit": max_results, "fields": self.RELATION_FIELDS}
         if relation == "citations" and publication_date_or_year:
             params["publicationDateOrYear"] = publication_date_or_year
@@ -341,6 +366,14 @@ class SemanticScholarTool(Tool):
         return {"next_offset": next_offset, "relations": relations}
 
     def _batch_lookup(self, paper_ids: List[str]) -> Dict[str, Any]:
+        """Fetch multiple papers in one batch request and split found papers from missing identifiers.
+
+        Args:
+            paper_ids: Paper identifiers to look up, in request order.
+
+        Returns:
+            Dict with the found paper objects under papers and the unmatched identifiers under not_found_ids.
+        """
         data = self._request(
             "/paper/batch",
             params={"fields": self.BATCH_FIELDS},
@@ -366,6 +399,13 @@ class SemanticScholarTool(Tool):
         params: Optional[Dict[str, Any]] = None,
         json_body: Optional[Dict[str, Any]] = None,
     ) -> Any:
+        """Send a GET request, or a POST when a JSON body is provided, and return the decoded JSON response.
+
+        Args:
+            path: API path appended to the base URL.
+            params: Optional query parameters.
+            json_body: Optional JSON body; when provided the request is sent as POST.
+        """
         headers = {"User-Agent": self.user_agent}
         if self.api_key:
             headers["x-api-key"] = self.api_key
@@ -394,6 +434,14 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_mode(cls, mode: str) -> str:
+        """Trim, lowercase, and validate an operation mode against the supported modes.
+
+        Args:
+            mode: Operation mode supplied by the caller.
+
+        Returns:
+            Normalized mode string guaranteed to be in MODES.
+        """
         normalized_mode = mode.strip().lower() if isinstance(mode, str) else ""
         if normalized_mode not in cls.MODES:
             raise ValueError("mode must be one of: batch, citations, paper, references, search")
@@ -401,6 +449,15 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_query(cls, query: str | List[str], mode: str) -> str | List[str]:
+        """Normalize a query for its mode, applying identifier validation in paper-related modes.
+
+        Args:
+            query: Search text, a single identifier, or a list of identifiers in batch mode.
+            mode: Normalized operation mode.
+
+        Returns:
+            Normalized query string or, in batch mode, a list of normalized identifiers.
+        """
         if mode == "batch":
             return cls._normalize_batch_ids(query)
         normalized_query = query.strip() if isinstance(query, str) else ""
@@ -412,6 +469,14 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_batch_ids(cls, value: Any) -> List[str]:
+        """Validate a batch query value and return a normalized list of unique paper identifiers.
+
+        Args:
+            value: Raw batch query value supplied by the caller.
+
+        Returns:
+            List of normalized, de-duplicated paper identifiers.
+        """
         if not isinstance(value, list):
             raise ValueError("query must be a list of paper identifiers in batch mode")
         if not 1 <= len(value) <= cls.MAX_BATCH_RESULTS:
@@ -425,6 +490,7 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _validate_max_results(max_results: int) -> None:
+        """Validate that max_results is an integer between 1 and 20."""
         if isinstance(max_results, bool) or not isinstance(max_results, int):
             raise ValueError("max_results must be an integer between 1 and 20")
         if not 1 <= max_results <= 20:
@@ -432,11 +498,13 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _validate_page(page: int) -> None:
+        """Validate that page is an integer of at least 1."""
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise ValueError("page must be an integer greater than or equal to 1")
 
     @staticmethod
     def _validate_result_window(mode: str, offset: int, max_results: int) -> None:
+        """Ensure search results stay within the first 1,000 accessible results."""
         if mode == "search" and offset + max_results > 1000:
             raise ValueError("search can access only the first 1,000 results")
 
@@ -452,6 +520,7 @@ class SemanticScholarTool(Tool):
         min_citation_count: Optional[int],
         open_access_only: bool,
     ) -> None:
+        """Validate the mode-specific filter and page constraints for an operation."""
         if not isinstance(open_access_only, bool):
             raise ValueError("open_access_only must be a boolean")
         search_only_filters = (year, publication_types, fields_of_study, venue, min_citation_count)
