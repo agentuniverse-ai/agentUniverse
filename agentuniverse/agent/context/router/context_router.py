@@ -292,6 +292,8 @@ class ContextRouter(ComponentBase):
             Optimized list of storage tiers to search
         """
         tiers = self.route_read(task_type, context_type, **kwargs)
+        if not isinstance(query, str) or not query.strip():
+            return tiers
 
         # Keyword-based optimization
         query_lower = query.lower()
