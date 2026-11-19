@@ -71,7 +71,7 @@ class FrameworkContextManager:
             return default_value
         return self.context_dict[var_name].get(default_value)
 
-    def del_context(self, var_name: str, force: bool = False):
+    def del_context(self, var_name: str, force: bool = False) -> None:
         """Set a context variable to None.
 
         Args:
@@ -86,7 +86,7 @@ class FrameworkContextManager:
                 else:
                     self.context_dict[var_name].set(None)
 
-    def reset_context(self, var_name: str, token: Token):
+    def reset_context(self, var_name: str, token: Token) -> None:
         """Reset a context variable using given token.
 
         Args:
@@ -115,10 +115,10 @@ class FrameworkContextManager:
             context_tokens[var_name] = self.set_context(var_name, var_value)
         return context_tokens
 
-    def clear_all_contexts(self):
+    def clear_all_contexts(self) -> None:
         self.__context_dict.set({})
 
-    def set_log_context(self, context_key: str, context_value: Any):
+    def set_log_context(self, context_key: str, context_value: Any) -> None:
         current_context = self.get_context("LOG_CONTEXT")
         log_context = current_context.copy() if isinstance(current_context, dict) else {}
         log_context[context_key] = context_value
