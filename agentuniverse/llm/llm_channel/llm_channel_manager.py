@@ -12,6 +12,11 @@ from agentuniverse.base.component.component_manager_base import ComponentManager
 
 @singleton
 class LLMChannelManager(ComponentManagerBase):
+    """Singleton manager for llm channel components.
+
+    It registers and resolves LLMChannel component instances by name.
+    """
 
     def __init__(self):
+        """Initialize the manager for the LLM_CHANNEL component type."""
         super().__init__(ComponentEnum.LLM_CHANNEL)
