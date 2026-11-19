@@ -127,9 +127,9 @@ class RequestTask:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("Request task execute failed: " + str(e) + traceback.format_exc())
+            self.__request_do__.result['result'] = {"error_msg": str(e)}
+            self.next_state(TaskStateEnum.FAIL)
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
-                self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n "
 
@@ -173,9 +173,9 @@ class RequestTask:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("Request task execute failed: " + str(e) + traceback.format_exc())
+            self.__request_do__.result['result'] = {"error_msg": str(e)}
+            self.next_state(TaskStateEnum.FAIL)
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
-                self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n "
 
@@ -222,9 +222,9 @@ class RequestTask:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("request task update request state Fail: " + str(e))
+            self.__request_do__.result['result'] = {"error_msg": str(e)}
+            self.next_state(TaskStateEnum.FAIL)
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
-                self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n"
 
