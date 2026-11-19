@@ -68,7 +68,10 @@ class AWSBedrockLLM(LLM):
             try:
                 import boto3
             except ImportError:
-                raise ImportError("boto3 is required for AWS Bedrock LLM. Install it with: pip install boto3")
+                raise ImportError(
+                    "boto3 is required for AWS Bedrock LLM. "
+                    "Install it with: pip install 'agentUniverse[aws_ext]'"
+                )
             
             session_kwargs = {
                 'region_name': self.aws_region,
