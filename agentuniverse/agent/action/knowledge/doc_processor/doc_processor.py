@@ -19,11 +19,11 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 class DocProcessor(ComponentBase):
     """The basic class for doc processor.
-    
-    DocProcessor is an abstract base class that defines the interface for document 
-    processing components in the agentUniverse framework. Document processors can 
+
+    DocProcessor is an abstract base class that defines the interface for document
+    processing components in the agentUniverse framework. Document processors can
     transform, filter, or enhance documents before they are used by agents.
-    
+
     Attributes:
         component_type: Enum value identifying this as a document processor component.
         name: Optional name identifier for the processor.
@@ -47,16 +47,16 @@ class DocProcessor(ComponentBase):
                       query: Query = None) -> \
             List[Document]:
         """Process input documents，return should also be a document list.
-        
-        This is the core implementation method that subclasses must override to 
-        provide specific document processing logic. The method should transform 
-        the input documents according to the processor's purpose and optionally 
+
+        This is the core implementation method that subclasses must override to
+        provide specific document processing logic. The method should transform
+        the input documents according to the processor's purpose and optionally
         use the query for context-aware processing.
-        
+
         Args:
             origin_docs: List of documents to be processed.
             query: Optional query object that may influence the processing.
-            
+
         Returns:
             List[Document]: Processed documents.
         """
