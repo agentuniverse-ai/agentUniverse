@@ -27,6 +27,7 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class Neo4jStore(Store):
+    """Knowledge Store that persists and queries graph documents in a Neo4j database via Cypher."""
 
     uri: Optional[str] = None
     user: Optional[str] = None
@@ -36,6 +37,7 @@ class Neo4jStore(Store):
     async_driver: Any = None
 
     def _new_client(self) -> Any:
+        """Create the synchronous Neo4j driver and cache it on the store. Returns: Any: The driver."""
         if self.database:
             self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password), database=self.database)
         else:
@@ -43,6 +45,7 @@ class Neo4jStore(Store):
                                                auth=(self.user, self.password))
 
     def _new_async_client(self) -> Any:
+        """Create the asynchronous Neo4j driver and cache it on the store. Returns: Any: The async driver."""
         if self.database:
             self.async_driver = AsyncGraphDatabase.driver(self.uri,
                                                auth=(self.user, self.password),
@@ -52,11 +55,13 @@ class Neo4jStore(Store):
                                                auth=(self.user, self.password))
 
     def execute_cypher(self, query_str, param=None, return_data=True):
+        """Run a Cypher query on a session and return the results as a DataFrame. Args: query_str: The Cypher statement. param: Optional query parameters. return_data (bool): Whether results are materialized. Returns: The result DataFrame."""
         df_result = self._execute_cypher(self.driver.session(), query_str, param, return_data)
         return df_result
 
     @staticmethod
     def _execute_cypher(session, query_str, param=None, return_data=True):
+        """Run query_str on the given session, optionally materializing the records into a DataFrame, and close the session. Args: session: The Neo4j session. query_str: The Cypher statement. param: Optional query parameters. return_data (bool): Whether results are materialized. Returns: The result DataFrame."""
         df_result = pd.DataFrame()
         if param is None:
             result = session.run(query_str)
@@ -74,6 +79,7 @@ class Neo4jStore(Store):
 
 
     def query(self, query: Query, **kwargs) -> List[Document]:
+        """Retrieve documents from the store according to the query type (direct_cypher, llm_generate_cypher or node_ids_query). Raises: NotImplementedError for unsupported query types. Args: query (Query): The retrieval query. **kwargs: Extra options. Returns: List[Document]: The retrieved documents."""
         query_type = query.ext_info.get("query_type", "")
 
         if query_type == "direct_cypher":
@@ -106,6 +112,7 @@ class Neo4jStore(Store):
             raise NotImplementedError('This query type is not allowed in neo4j store.')
 
     def _records_to_documents(self, text, records: pd.DataFrame) -> List[Document]:
+        """Wrap the Cypher records into a single GraphDocument. Args: text: The query text. records (pd.DataFrame): The query results. Returns: List[Document]: The documents."""
         documents = [
             GraphDocument(
                 text=text,
