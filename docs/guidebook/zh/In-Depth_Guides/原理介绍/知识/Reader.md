@@ -1,5 +1,7 @@
 # Reader
 
+需要可复现地读取本地仓库指定提交时，参阅可选的[Git 提交快照 Reader](GitSnapshotReader.md)。
+
 Reader负责从各式各样的信息源中将信息抽取成agentUniverse中的Document形式。这些信息源可以是各种本地文件，也可以是网页或者一个IO接口，
 
 Reader的定义如下:

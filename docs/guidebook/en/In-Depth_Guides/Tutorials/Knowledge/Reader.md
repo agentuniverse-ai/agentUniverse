@@ -1,5 +1,8 @@
 # Reader
 
+For reproducible local repository ingestion, see the opt-in
+[pinned Git snapshot Reader](GitSnapshotReader.md).
+
 The Reader is responsible for extracting information from various sources into the Document format used within agentUniverse. These sources can range from local files to web pages or even an I/O interface.
 
 The Reader is defined as follows:
