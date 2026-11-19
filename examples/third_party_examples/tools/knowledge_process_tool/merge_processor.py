@@ -30,10 +30,33 @@ class MergeByMetadata(DocProcessor):
     prefer_higher_score: bool = True
 
     def _make_group_key(self, metadata: Optional[Dict]) -> Tuple:
+        """Build the grouping key tuple from the document metadata.
+
+        Args:
+            metadata (Optional[Dict]): Document metadata; None is treated as
+                an empty dict.
+
+        Returns:
+            Tuple: values of the configured `group_keys` in the metadata.
+        """
         metadata = metadata or {}
         return tuple(metadata.get(k) for k in self.group_keys)
 
     def _process_docs(self, origin_docs: List[Document], query: Query | None = None) -> List[Document]:
+        """Merge input documents that share the same group key.
+
+        Docs are grouped by `_make_group_key`; within a group the texts are
+        concatenated with `separator` and the metadata of the representative
+        document is kept (the highest scored one when `prefer_higher_score`).
+
+        Args:
+            origin_docs (List[Document]): Documents to merge.
+            query (Query | None): Optional query, currently unused.
+
+        Returns:
+            List[Document]: Merged documents, or the original list when it is
+            empty or no `group_keys` are configured.
+        """
         if not origin_docs or not self.group_keys:
             return origin_docs
         grouped: Dict[Tuple, List[Document]] = {}
@@ -55,6 +78,16 @@ class MergeByMetadata(DocProcessor):
         return merged_docs
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> "DocProcessor":
+        """Initialize instance attributes from the component configer.
+
+        Args:
+            doc_processor_configer (ComponentConfiger): Configer holding the
+                optional `group_keys`, `separator` and `prefer_higher_score`
+                settings.
+
+        Returns:
+            DocProcessor: The initialized processor instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "group_keys"):
             self.group_keys = list(doc_processor_configer.group_keys)
