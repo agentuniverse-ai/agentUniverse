@@ -11,6 +11,9 @@ class LineTxtReader(Reader):
     def _load_data(self, fpath: Path, ext_info: Optional[Dict] = None) -> List[Document]:
         dlist: List[Document] = []
         encoding = detect_file_encoding(fpath)
+        # Bound the input: a crafted large file would otherwise accumulate an
+        # unbounded list of line Documents in memory.
+        self._check_file_size(fpath)
 
         with open(fpath, 'r', encoding=encoding) as file:
             metadata = {"file_name": Path(file.name).name}
@@ -28,6 +31,9 @@ class TxtReader(Reader):
 
     def _load_data(self, fpath: Path, ext_info: Optional[Dict] = None) -> List[Document]:
         encoding = detect_file_encoding(fpath)
+        # Bound the input: file.read() materialises the whole file at once,
+        # so a 10 GB file would OOM the process before any Document is built.
+        self._check_file_size(fpath)
 
         with open(fpath, 'r', encoding=encoding) as file:
             metadata = {"file_name": Path(file.name).name}

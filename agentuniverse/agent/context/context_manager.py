@@ -16,6 +16,7 @@ The ContextManager is responsible for:
 
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
+import logging
 
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -26,6 +27,8 @@ from agentuniverse.agent.context.context_model import (
     ContextPriority,
 )
 from agentuniverse.agent.context.context_store import ContextStore
+
+logger = logging.getLogger(__name__)
 
 
 class ContextManager(ComponentBase):
@@ -438,9 +441,27 @@ class ContextManager(ComponentBase):
                     preserve_types=[ContextType.SYSTEM, ContextType.TASK]  # Never compress these
                 )
 
-                # Replace segments in storage
+                # Replace segments in storage. If the add fails after the
+                # delete, restore the original segments so the hot store is
+                # not left empty — the previous code's bare ``except: pass``
+                # silently dropped the entire session history when compression
+                # produced output that the store rejected.
                 self._hot_store.delete(window.session_id)  # Clear old segments
-                self._hot_store.add(compressed, session_id=window.session_id)  # Add compressed
+                try:
+                    self._hot_store.add(compressed, session_id=window.session_id)  # Add compressed
+                except Exception:
+                    # Restore the originals we just deleted so the window is
+                    # not silently emptied; the eviction fallback below still
+                    # runs to actually free the requested tokens.
+                    try:
+                        self._hot_store.add(segments, session_id=window.session_id)
+                    except Exception:
+                        logger.exception(
+                            "ContextManager: compression add failed AND the "
+                            "rollback add of the original segments failed; "
+                            "session %s hot store may be empty.",
+                            window.session_id)
+                    raise
 
                 # Update window tracking
                 window.total_tokens = sum(seg.tokens for seg in compressed)
@@ -452,8 +473,13 @@ class ContextManager(ComponentBase):
                 return  # Compression successful
 
             except Exception as e:
-                # Compression failed, fall back to simple eviction
-                pass
+                # Compression failed; log it so operators can see why the
+                # context switched to eviction (LLM timeout, rate limit, store
+                # rejection, ...), then fall back to simple eviction below.
+                logger.warning(
+                    "ContextManager: compression failed for session %s, "
+                    "falling back to eviction: %s", window.session_id, e,
+                    exc_info=True)
 
         # Strategy 3: Fallback - Simple eviction by priority and decay
         segments = self._hot_store.get(window.session_id)
