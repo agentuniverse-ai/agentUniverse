@@ -1,0 +1,15 @@
+{
+  "feature": "feat(knowledge): report corpus version citation impact",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4220",
+  "tested_code_commit": "8a4fce55a24414b8df0649b5d8c0e81168244377",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_corpus_impact.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
