@@ -61,5 +61,5 @@ class KnowledgeConfiger(ComponentConfiger):
             self.__description = configer.value.get('description')
             self.__ext_info = configer.value.get('ext_info')
         except Exception as e:
-            raise Exception(f"Failed to parse the Knowledge configuration: {e}")
+            raise Exception(f"Failed to parse the Knowledge configuration: {e}") from e
         return self

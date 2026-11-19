@@ -49,5 +49,5 @@ class WorkPatternConfiger(ComponentConfiger):
             self.__name = configer.value.get('name')
             self.__description = configer.value.get('description')
         except Exception as e:
-            raise Exception(f"Failed to parse the work pattern configuration: {e}")
+            raise Exception(f"Failed to parse the work pattern configuration: {e}") from e
         return self

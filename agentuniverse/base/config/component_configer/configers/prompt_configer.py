@@ -54,5 +54,5 @@ class PromptConfiger(ComponentConfiger):
                 if self.metadata_class is None:
                     self.metadata_class = 'Prompt'
         except Exception as e:
-            raise Exception(f"Failed to parse the Prompt configuration: {e}")
+            raise Exception(f"Failed to parse the Prompt configuration: {e}") from e
         return self

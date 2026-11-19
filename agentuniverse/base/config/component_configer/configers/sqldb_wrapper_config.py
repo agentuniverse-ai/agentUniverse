@@ -79,5 +79,5 @@ class SQLDBWrapperConfiger(ComponentConfiger):
             self.sql_database_args = dict(configer.value.get('sql_database_args', {}))
 
         except Exception as e:
-            raise Exception(f"Failed to parse the db wrapper configuration: {e}")
+            raise Exception(f"Failed to parse the db wrapper configuration: {e}") from e
         return self

@@ -62,5 +62,5 @@ class WorkflowConfiger(ComponentConfiger):
             self.__description = configer.value.get('description')
             self.__graph = configer.value.get('graph')
         except Exception as e:
-            raise Exception(f"Failed to parse the Workflow configuration: {e}")
+            raise Exception(f"Failed to parse the Workflow configuration: {e}") from e
         return self
