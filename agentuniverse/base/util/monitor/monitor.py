@@ -44,6 +44,8 @@ class Monitor(BaseModel):
     @staticmethod
     def trace_llm_input(source: str, llm_input: Union[str, dict]) -> None:
         """Trace the llm input."""
+        if not Monitor().log_activate:
+            return
         logger.bind(
             log_type=LogTypeEnum.llm_input,
             llm_input=llm_input,
