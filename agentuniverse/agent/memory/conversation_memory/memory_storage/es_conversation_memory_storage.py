@@ -107,6 +107,8 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             session_id (str): The session id of the memory to delete.
             agent_id (str): The agent id of the memory to delete.
         """
+        if session_id is None and agent_id is None and trace_id is None:
+            return
         url = f'{self.es_url}/{self.index_name}/_delete_by_query'
         query = {
             "query": {
