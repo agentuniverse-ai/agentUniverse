@@ -162,6 +162,14 @@ class EmailDocumentTool(Tool):
 
     @staticmethod
     def _safe_filename(value: Any) -> str:
+        """Validate that an attachment filename is a plain basename with no separators or NUL bytes.
+
+        Args:
+            value: Candidate attachment filename to check.
+
+        Returns:
+            The validated filename.
+        """
         if not isinstance(value, str) or not value or "\x00" in value:
             raise ValueError("attachment has an invalid filename")
         if value in {".", ".."} or os.path.basename(value) != value or "/" in value or "\\" in value:
@@ -169,6 +177,14 @@ class EmailDocumentTool(Tool):
         return value
 
     def _attachment_inputs(self, values: Any) -> list[tuple[str, str, str, str]]:
+        """Resolve and validate attachment source files into MIME attachment descriptors.
+
+        Args:
+            values: Attachment source paths as a list of non-empty strings, or None for no attachments.
+
+        Returns:
+            List of (source path, basename, maintype, subtype) tuples; empty when values is None.
+        """
         if values is None:
             return []
         if not isinstance(values, list):
@@ -208,6 +224,15 @@ class EmailDocumentTool(Tool):
         attachments: Any,
         overwrite: Any,
     ) -> dict[str, Any]:
+        """Compose an email message from validated inputs and atomically write it as an EML file.
+        Args:
+            path: Destination .eml path for the generated message.
+            headers: Raw create-mode headers mapping, validated and normalized internally.
+            text_body: Plain-text body; may be None when html_body is given.
+            html_body: HTML body; may be None when text_body is given.
+            attachments: Source file paths to embed as attachments, or None.
+        Returns: Success dict with mode, file_path, attachment_count, and file_size.
+        """
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         if os.path.exists(path) and not overwrite:
@@ -237,6 +262,14 @@ class EmailDocumentTool(Tool):
         }
 
     def _attachment_parts(self, message: Message) -> list[dict[str, Any]]:
+        """Walk a message and validate its attachments against size, count, and duplicate-name limits.
+
+        Args:
+            message: Parsed email message to walk.
+
+        Returns:
+            List of dicts with name, size, content_type, and part for each attachment.
+        """
         output = []
         total = 0
         names: set[str] = set()
@@ -261,6 +294,14 @@ class EmailDocumentTool(Tool):
         return output
 
     def _body_parts(self, message: Message) -> tuple[str, str, bool]:
+        """Join and decode the plain-text and HTML body parts of a message, truncating them when the combined size exceeds max_body_chars.
+
+        Args:
+            message: Parsed email message to walk.
+
+        Returns:
+            Tuple of (text, html, truncated), where truncated reports whether the bodies were cut off.
+        """
         text_parts: list[str] = []
         html_parts: list[str] = []
         for part in message.walk():
@@ -284,9 +325,26 @@ class EmailDocumentTool(Tool):
         return text, html, True
 
     def _header_output(self, message: Message) -> dict[str, str]:
+        """Extract the configured read headers from a message using snake_case keys.
+
+        Args:
+            message: Parsed email message to read headers from.
+
+        Returns:
+            Dict mapping snake_case header names to string values (empty string when absent).
+        """
         return {name.lower().replace("-", "_"): str(message.get(name, "")) for name in self._READ_HEADERS}
 
     def _read(self, path: str, message: Message) -> dict[str, Any]:
+        """Return a full read result with decoded bodies, headers, and attachment metadata.
+
+        Args:
+            path: EML file path reported in the result.
+            message: Parsed email message to read.
+
+        Returns:
+            Success dict with headers, text_body, html_body, truncated, and attachment summaries.
+        """
         text, html, truncated = self._body_parts(message)
         attachments = self._attachment_parts(message)
         return {
@@ -301,6 +359,15 @@ class EmailDocumentTool(Tool):
         }
 
     def _info(self, path: str, message: Message) -> dict[str, Any]:
+        """Return a metadata-only info result for an email message.
+
+        Args:
+            path: EML file path reported in the result.
+            message: Parsed email message to inspect.
+
+        Returns:
+            Success dict with file_size, headers, header_count, attachment counts and bytes, body character counts, and truncated.
+        """
         text, html, truncated = self._body_parts(message)
         attachments = self._attachment_parts(message)
         return {
@@ -325,6 +392,15 @@ class EmailDocumentTool(Tool):
         names: Any,
         overwrite: Any,
     ) -> dict[str, Any]:
+        """Write the selected attachments of a message as files into an output directory.
+        Args:
+            path: Source EML file path reported in the result.
+            message: Parsed email message whose attachments are extracted.
+            output_dir: Directory the attachment files are written to; created if missing.
+            names: Optional list of attachment filenames to extract; None means all attachments.
+            overwrite: Whether existing destination files may be replaced.
+        Returns: Success dict with output_dir, output_paths, and attachment_count.
+        """
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         directory = self._directory(output_dir)
@@ -356,6 +432,12 @@ class EmailDocumentTool(Tool):
         }
 
     def _atomic_write(self, destination: str, content: bytes) -> None:
+        """Atomically write byte content to a destination file via a temporary file in the same directory.
+
+        Args:
+            destination: Path of the file to write.
+            content: Byte content to write; must not exceed max_write_bytes.
+        """
         if len(content) > self.max_write_bytes:
             raise ValueError(f"generated file exceeds max_write_bytes ({self.max_write_bytes})")
         os.makedirs(os.path.dirname(destination), exist_ok=True)
