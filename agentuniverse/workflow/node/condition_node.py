@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from agentuniverse.workflow.node.enum import NodeEnum, ConditionComparisonEnum, NodeStatusEnum
 from agentuniverse.workflow.node.node import Node, NodeData
-from agentuniverse.workflow.node.node_config import ConditionNodeInputParams, ConditionBranchParams, ConditionParams, \
+from agentuniverse.workflow.node.node_config import ConditionNodeInputParams, ConditionParams, \
     NodeInputParams, NodeOutputParams
 from agentuniverse.workflow.node.node_output import NodeOutput
 from agentuniverse.workflow.workflow_output import WorkflowOutput
@@ -29,9 +29,6 @@ class ConditionNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: ConditionNodeInputParams = self._data.inputs
-        condition_branches: List[ConditionBranchParams] = inputs.branches
-        condition_branch: ConditionBranchParams = condition_branches[0]
-        condition: ConditionParams = condition_branch.conditions[0]
 
         def resolve_value(node_input: NodeInputParams):
             if node_input.value.type == 'reference':
@@ -43,20 +40,31 @@ class ConditionNode(Node):
                     None)
             return node_input.value.content
 
-        left_val = resolve_value(condition.left)
-        right_val = resolve_value(condition.right) if condition.right else None
+        def evaluate(condition: ConditionParams) -> bool:
+            left_val = resolve_value(condition.left)
+            right_val = resolve_value(condition.right) if condition.right else None
+            compare: str = condition.compare
+            if compare == ConditionComparisonEnum.EQUAL.value:
+                return left_val == right_val
+            elif compare == ConditionComparisonEnum.NOT_EQUAL.value:
+                return left_val != right_val
+            elif compare == ConditionComparisonEnum.BLANK.value:
+                return left_val is None
+            return False
 
-        compare: str = condition.compare
-        res = False
-
-        if compare == ConditionComparisonEnum.EQUAL.value:
-            res = left_val == right_val
-        elif compare == ConditionComparisonEnum.NOT_EQUAL.value:
-            res = left_val != right_val
-        elif compare == ConditionComparisonEnum.BLANK.value:
-            res = left_val is None
+        for condition_branch in inputs.branches:
+            # An empty conditions list is treated as always-true (else-branch
+            # semantics); multiple conditions within a branch are combined with
+            # logical AND - the first matching branch wins (if/elif/else order).
+            conditions = condition_branch.conditions or []
+            if all(evaluate(c) for c in conditions):
+                return NodeOutput(
+                    node_id=self.id,
+                    status=NodeStatusEnum.SUCCEEDED,
+                    edge_source_handler=condition_branch.name
+                )
         return NodeOutput(
             node_id=self.id,
             status=NodeStatusEnum.SUCCEEDED,
-            edge_source_handler=condition_branch.name if res else 'branch-default'
+            edge_source_handler='branch-default'
         )
