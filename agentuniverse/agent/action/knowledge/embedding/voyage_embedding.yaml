@@ -1,0 +1,8 @@
+name: 'voyage_embedding'
+description: 'embedding use voyage ai api with support for voyage-3.5, voyage-3-lite, voyage-3-large and voyage-code-3 models'
+embedding_model_name: 'voyage-3.5'
+input_type: 'document'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.voyage_embedding'
+  class: 'VoyageEmbedding'
