@@ -64,7 +64,7 @@ class ReActPlanner(Planner):
         assemble_memory_input(memory, planner_input)
         stop_sequence = []
         if agent_model.plan.get('stop_sequence'):
-            stop_sequence = agent_model.profile.get('stop_sequence')
+            stop_sequence = agent_model.plan.get('stop_sequence')
         agent = create_react_agent(llm.as_langchain(), tools, prompt.as_langchain(), stop_sequence=stop_sequence,
                                    bind_params=agent_model.llm_params())
         agent_executor = AgentExecutor(agent=agent, tools=tools,
