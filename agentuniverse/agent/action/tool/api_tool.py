@@ -191,8 +191,6 @@ class APITool(Tool):
                             )
                         elif 'default' in property:
                             body[name] = property['default']
-                        else:
-                            body[name] = None
                     break
 
         # replace path parameters
