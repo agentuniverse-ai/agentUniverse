@@ -1,0 +1,51 @@
+name: color_converter_tool
+description: Color converter tool — pure Python stdlib, no network required. Convert between CSS color notations (mode='convert'): hex #rgb/#rrggbb/#rrggbbaa, rgb()/rgba() integer channels, hsl()/hsla() degrees-percents, hsv()/hsva() and ~48 embedded common named colors. Inspect one color (mode='info'): every representation, WCAG relative luminance, contrast against white/black and the nearest named color. Check accessibility (mode='contrast'): WCAG 2.x contrast ratio 1-21 of two opaque colors with AA/AAA pass/fail for normal (4.5/7.0) and large (3.0/4.5) text.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.color_converter_tool
+  class: ColorConverterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Color mode — convert, info or contrast.
+    required: true
+  color:
+    type: string
+    description: The color to convert or inspect, in any supported notation (hex #rgb/#rrggbb/#rrggbbaa, rgb()/rgba(), hsl()/hsla(), hsv()/hsva(), or a common CSS named color). Required for the convert and info modes; not used by contrast mode.
+    required: false
+  to_format:
+    type: string
+    description: Target format for the convert mode — hex (6-digit, 8-digit when alpha < 1), hex8, rgb (rgba() when alpha < 1), hsl, hsv or name (exact-match only).
+    required: false
+  foreground:
+    type: string
+    description: Contrast mode only — the first color of the pair (the text color in accessibility checks). Must be opaque.
+    required: false
+  background:
+    type: string
+    description: Contrast mode only — the second color of the pair (the surface color). Must be opaque.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["convert", "info", "contrast"]
+      description: Color mode.
+    color:
+      type: string
+      description: Color to convert / inspect (convert and info modes).
+    to_format:
+      type: string
+      enum: ["hex", "hex8", "rgb", "hsl", "hsv", "name"]
+      description: Target format (convert mode).
+    foreground:
+      type: string
+      description: First color of the contrast pair (contrast mode).
+    background:
+      type: string
+      description: Second color of the contrast pair (contrast mode).
+  required: ["mode"]
