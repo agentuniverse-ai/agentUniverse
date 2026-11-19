@@ -14,6 +14,7 @@ class OutputObject(object):
             self.__dict__[k] = v
 
     def to_dict(self):
+        """Return a copy of the internal params dictionary."""
         return self.__params.copy()
 
     def to_json_str(self):
