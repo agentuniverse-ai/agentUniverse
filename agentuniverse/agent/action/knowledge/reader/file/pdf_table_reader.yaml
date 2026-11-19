@@ -1,0 +1,18 @@
+name: pdf_table_continuation_reader
+description: Extract ruled PDF tables and join explicitly captioned adjacent continuations.
+caption_prefix: Table
+continuation_marker: continued
+edge_margin: 84.0
+caption_lookback: 60.0
+column_tolerance: 3.0
+max_file_bytes: 33554432
+max_pages: 50
+max_tables: 200
+max_cells: 100000
+max_page_chars: 50000
+max_page_edges: 20000
+max_output_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.pdf_table_reader
+  class: PdfTableContinuationReader
