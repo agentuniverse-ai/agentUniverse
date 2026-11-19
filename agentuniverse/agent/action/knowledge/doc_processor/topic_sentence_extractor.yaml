@@ -1,0 +1,39 @@
+name: 'topic_sentence_extractor'
+description: "extract each paragraph's topic sentence into document metadata for extractive skeleton previews"
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.topic_sentence_extractor'
+  class: 'TopicSentenceExtractor'
+
+# Minimum trimmed character length for a paragraph to be analysed;
+# shorter paragraphs are skipped entirely. Must be an integer >= 0.
+min_paragraph_chars: 20
+
+# Score bonus for a paragraph's first sentence — the classic extractive
+# bias that openings carry the topic. Must be >= 0.
+first_bonus: 2.0
+
+# Score bonus for a paragraph's last sentence — the weaker classic bias
+# that closings wrap the point up. Must be >= 0.
+last_bonus: 0.5
+
+# Score bonus for sentences of 40-120 characters (trimming hedging-free,
+# information-dense length). Must be >= 0.
+length_band_bonus: 1.0
+
+# Score penalty (subtracted) for sentences longer than 250 characters —
+# rambling candidates make poor anchors. Must be >= 0.
+rambling_penalty: 1.0
+
+# Score bonus for signpost openers: This / These / Here we / In this
+# (case-insensitive) and 本文 / 本节. Must be >= 0.
+signpost_bonus: 1.5
+
+# Score bonus for definitional copula patterns found anywhere in the
+# sentence: "is a" / "are" (case-insensitive) and 是指. Must be >= 0.
+copula_bonus: 0.5
+
+# When true, also stamp metadata['skeleton'] — the (capped) topic
+# sentences joined with " … " — as a ready-to-render preview string.
+doc_skeleton: false
