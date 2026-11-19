@@ -25,6 +25,8 @@ from agentuniverse.prompt.chat_prompt import ChatPrompt
 
 
 class DiscussionGroupTemplate(AgentTemplate):
+    """Template that runs a multi-agent discussion group: participant agents talk over several rounds and a host agent summarizes the conclusion.
+    """
     participant_names: Optional[list[str]] = None
     total_round: int = 2
     topic: Optional[str] = None
@@ -38,19 +40,54 @@ class DiscussionGroupTemplate(AgentTemplate):
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Fill the agent input with the discussion topic, participant names and total rounds.
+
+        Args:
+            input_object(InputObject): The user input object.
+            agent_input(dict): The agent input dictionary to be filled.
+
+        Returns:
+            dict: The updated agent input.
+        """
         agent_input['input'] = input_object.get_data('input') or self.topic
         agent_input['participants'] = self.participant_names
         agent_input['total_round'] = self.total_round
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return the agent result unchanged.
+
+        Args:
+            agent_result(dict): The raw agent result.
+
+        Returns:
+            dict: The agent result.
+        """
         return agent_result
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Execute the discussion group by generating the participant agents and running the full discussion.
+
+        Args:
+            input_object(InputObject): The user input object.
+            agent_input(dict): The agent input dictionary.
+            **kwargs: Extra keyword arguments accepted for interface compatibility.
+
+        Returns:
+            dict: The discussion group result.
+        """
         participant_agents = self.generate_participant_agents()
         return self.agents_run(participant_agents, agent_input, input_object)
 
     def generate_participant_agents(self) -> dict:
+        """Build a dict of participant agents keyed by their names.
+
+        Returns:
+            dict: Mapping from participant name to the corresponding Agent instance.
+
+        Raises:
+            ValueError: If the participant_names list is empty.
+        """
         if len(self.participant_names) == 0:
             raise ValueError("The participant agents is empty.")
         agents = dict()
@@ -160,6 +197,14 @@ class DiscussionGroupTemplate(AgentTemplate):
         return {**agent_input, 'output': res}
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'DiscussionGroupTemplate':
+        """Initialize the discussion group template from the configer profile fields.
+
+        Args:
+            component_configer(AgentConfiger): The configer containing the template settings.
+
+        Returns:
+            DiscussionGroupTemplate: The initialized template instance.
+        """
         super().initialize_by_component_configer(component_configer)
         if self.agent_model.profile.get('topic'):
             self.topic = self.agent_model.profile.get('topic')
