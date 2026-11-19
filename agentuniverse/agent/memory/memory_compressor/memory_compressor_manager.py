@@ -16,4 +16,6 @@ class MemoryCompressorManager(ComponentManagerBase[MemoryCompressor]):
     """A singleton manager class of the MemoryCompressor."""
 
     def __init__(self):
+        """Initialize the memory compressor manager.
+        """
         super().__init__(ComponentEnum.MEMORY_COMPRESSOR)
