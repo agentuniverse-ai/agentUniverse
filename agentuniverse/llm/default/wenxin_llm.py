@@ -100,6 +100,13 @@ class WenXinLLM(LLM):
         return self.agenerate_stream_result(chat_completion)
 
     def max_context_length(self) -> int:
+        """Return the maximum context length for the configured Wenxin model.
+
+        Uses the value configured on the parent class when set, otherwise
+        queries the client for the model info and returns its max input
+        tokens, falling back to the max input chars when tokens is not
+        reported.
+        """
         if super().max_context_length():
             return super().max_context_length()
         res = self._new_client().get_model_info(self.model_name)
