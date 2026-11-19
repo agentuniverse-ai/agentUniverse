@@ -1,0 +1,32 @@
+name: json_formatter_tool
+description: >-
+  Beautify, minify, validate, and extract JSON payloads using only the Python
+  standard library. Useful for cleaning up model output, shrinking payloads
+  before storage, and sanity-checking JSON produced by other tools.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_formatter_tool
+  class: JSONFormatterTool
+input_keys:
+  - mode
+  - input
+max_input_chars: 100000
+indent: 2
+args_model:
+  mode: {type: string, required: true}
+  input: {type: string, required: true}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [beautify, minify, validate, extract]
+      description: Operation to perform on the input.
+    input:
+      type: string
+      description: >-
+        The JSON text to process. For ``extract`` this may be arbitrary text
+        that contains an embedded JSON value.
+  required: [mode, input]
+  additionalProperties: false
