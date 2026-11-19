@@ -1,0 +1,30 @@
+name: 'mojibake_detector'
+description: 'flag encoding-corrupted text (mojibake) into document metadata for quarantine decisions'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mojibake_detector'
+  class: 'MojibakeDetector'
+
+# Weighted-hit score below which the verdict is 'clean'.
+clean_below: 0.5
+
+# Weighted-hit score above which the verdict is 'corrupted'; scores in
+# between yield 'suspect'. The score is normalized per 1000 characters.
+corrupted_above: 5.0
+
+# Filter mode: false (default) stamps metadata only and keeps every
+# document; true additionally removes documents whose verdict is
+# 'corrupted' from the processed batch.
+drop_corrupted: false
+
+# Metadata keys for the analysis results; '' disables a single stamp.
+score_key: 'mojibake_score'
+verdict_key: 'mojibake_verdict'
+findings_key: 'mojibake_findings'
+
+# Signal kinds excluded from analysis, e.g. ['percent_encoding'] for
+# URL-heavy corpora where percent escapes are expected. One of:
+# replacement_char, utf8_as_latin1, utf8_as_cp1252, percent_encoding,
+# html_entity.
+disabled_signals: []
