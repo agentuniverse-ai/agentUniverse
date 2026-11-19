@@ -223,7 +223,7 @@ class StreamingResultProcessor:
     def __init__(self, source: str, llm_input: Any, llm_instance: Any,
                  start_time: float, span_manager: LLMSpanManager,
                  labels: Dict[str, str],
-                 metrics_recorder: LLMMetricsRecorder):
+                 metrics_recorder: LLMMetricsRecorder, gen_ai_adapter=None):
         self.source = source
         self.llm_input = llm_input
         self.llm_instance = llm_instance
@@ -232,6 +232,7 @@ class StreamingResultProcessor:
         self.span = span_manager.span
         self.labels = labels
         self.metrics_recorder = metrics_recorder
+        self.gen_ai_adapter = gen_ai_adapter
 
     async def process_async_stream(self,
                                    result: AsyncGenerator) -> AsyncGenerator:
@@ -253,11 +254,15 @@ class StreamingResultProcessor:
                 llm_output.append(chunk.text)
                 if chunk.usage:
                     usage = chunk.usage
+                if self.gen_ai_adapter is not None:
+                    self.gen_ai_adapter.observe_result(self.span, chunk)
                 yield chunk
             self._finalize_streaming_result(llm_output, usage)
 
-        except Exception as e:
+        except BaseException as e:
             duration = time.time() - self.start_time
+            if self.gen_ai_adapter is not None:
+                self.gen_ai_adapter.error(self.span, e)
             self._handle_streaming_error(e, duration)
             raise
         finally:
@@ -284,11 +289,15 @@ class StreamingResultProcessor:
                     chunk.text if hasattr(chunk, 'text') else str(chunk))
                 if hasattr(chunk, 'usage') and chunk.usage:
                     usage = chunk.usage
+                if self.gen_ai_adapter is not None:
+                    self.gen_ai_adapter.observe_result(self.span, chunk)
                 yield chunk
             self._finalize_streaming_result(llm_output, usage)
 
-        except Exception as e:
+        except BaseException as e:
             duration = time.time() - self.start_time
+            if self.gen_ai_adapter is not None:
+                self.gen_ai_adapter.error(self.span, e)
             self._handle_streaming_error(e, duration)
             raise
         finally:
@@ -339,6 +348,7 @@ class LLMInstrumentor(BaseInstrumentor):
         self._meter: Optional[metrics.Meter] = None
         self._metrics: Dict[str, Any] = {}
         self._metrics_recorder: Optional[LLMMetricsRecorder] = None
+        self._gen_ai_adapter = None
         self._original_llm_wrapper_sync = None
         self._original_llm_wrapper_async = None
 
@@ -347,6 +357,7 @@ class LLMInstrumentor(BaseInstrumentor):
 
     def _instrument(self, **kwargs):
         """Instrument LLM tracing."""
+        self._gen_ai_adapter = kwargs.get("gen_ai_adapter")
         tracer_provider = kwargs.get("tracer_provider")
         meter_provider = kwargs.get("meter_provider")
 
@@ -453,6 +464,8 @@ class LLMInstrumentor(BaseInstrumentor):
                                      llm_input, duration: float, span: Span,
                                      labels: Dict[str, str]) -> None:
         """Handle non-streaming LLM result."""
+        if self._gen_ai_adapter is not None:
+            self._gen_ai_adapter.observe_result(span, result)
         Monitor.trace_llm_invocation(source, llm_input, result.text, duration)
         Monitor().trace_llm_token_usage(llm_instance, llm_input, result)
 
@@ -474,6 +487,8 @@ class LLMInstrumentor(BaseInstrumentor):
 
         try:
             span = span_manager.start_span()
+            if self._gen_ai_adapter is not None:
+                self._gen_ai_adapter.begin_llm(span, llm_instance, kwargs)
             LLMSpanAttributesSetter.set_input_attributes(
                 span, source, channel_name, llm_input, params, caller_info)
 
@@ -496,15 +511,17 @@ class LLMInstrumentor(BaseInstrumentor):
                 span_manager.defer_cleanup()
                 processor = StreamingResultProcessor(
                     source, llm_input, llm_instance, start_time,
-                    span_manager, labels, self._metrics_recorder)
+                    span_manager, labels, self._metrics_recorder, self._gen_ai_adapter)
                 context.detach(span_manager.token)
                 return processor.process_async_stream(result)
 
-        except Exception as e:
+        except BaseException as e:
             duration = time.time() - start_time
             self._metrics_recorder.record_error(e, duration, labels)
             LLMSpanAttributesSetter.set_error_attributes(span_manager.span,
                                                          e, duration)
+            if self._gen_ai_adapter is not None:
+                self._gen_ai_adapter.error(span_manager.span, e)
             span_manager.cleanup()
             raise
 
@@ -519,6 +536,8 @@ class LLMInstrumentor(BaseInstrumentor):
 
         try:
             span = span_manager.start_span()
+            if self._gen_ai_adapter is not None:
+                self._gen_ai_adapter.begin_llm(span, llm_instance, kwargs)
             LLMSpanAttributesSetter.set_input_attributes(
                 span, source, channel_name, llm_input, params, caller_info)
 
@@ -541,14 +560,16 @@ class LLMInstrumentor(BaseInstrumentor):
                 span_manager.defer_cleanup()
                 processor = StreamingResultProcessor(
                     source, llm_input, llm_instance, start_time,
-                    span_manager, labels, self._metrics_recorder)
+                    span_manager, labels, self._metrics_recorder, self._gen_ai_adapter)
                 context.detach(span_manager.token)
                 return processor.process_sync_stream(result)
 
-        except Exception as e:
+        except BaseException as e:
             duration = time.time() - start_time
             self._metrics_recorder.record_error(e, duration, labels)
             LLMSpanAttributesSetter.set_error_attributes(span_manager.span,
                                                          e, duration)
+            if self._gen_ai_adapter is not None:
+                self._gen_ai_adapter.error(span_manager.span, e)
             span_manager.cleanup()
             raise
