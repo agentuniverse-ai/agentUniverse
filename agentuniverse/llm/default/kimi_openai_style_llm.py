@@ -66,5 +66,9 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         messages = [{"role": "user", "content": text}]
         body = {"model": self.model_name, "messages": messages}
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}
-        res = requests.post(f"{self.api_base}/tokenizers/estimate-token-count", headers=headers, json=body)
-        return res.json().get('data').get('total_tokens')
+        res = requests.post(f"{self.api_base}/tokenizers/estimate-token-count", headers=headers,
+                            json=body, timeout=30)
+        # An error payload carries no 'data' key, and .get() then returns None,
+        # so chaining another .get() would raise AttributeError inside counting.
+        data = res.json().get('data') or {}
+        return data.get('total_tokens', 0)
