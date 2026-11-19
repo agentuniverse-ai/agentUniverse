@@ -28,8 +28,10 @@ except ImportError:
 
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter not installed")
 class TestCodeAstProcessor(unittest.TestCase):
+    """Tests for CodeAstProcessor AST parsing and code metrics."""
 
     def setUp(self):
+        """Create sample python/java/cpp sources and an initialized processor."""
         self.temp_dir = tempfile.TemporaryDirectory()
         self.py_code = '''
 class FileProcessor:
@@ -106,9 +108,11 @@ public:
         self.processor._initialize_by_component_configer(configer)
 
     def tearDown(self):
+        """Clean up the temporary directory holding the sample sources."""
         self.temp_dir.cleanup()
 
     def test_process_python(self):
+        """_process_docs produces AST/features JSON for python source."""
         doc = Document(
             text=self.py_code,
             metadata={"language": "python", "file_name": "test.py"}
@@ -128,6 +132,7 @@ public:
         print(f'result: {result_docs[0].text}')
 
     def test_process_java(self):
+        """_process_docs produces AST/features JSON for java source."""
         doc = Document(
             text=self.java_code,
             metadata={"language": "java", "file_name": "test.java"}
@@ -146,6 +151,7 @@ public:
         # print(f'ast_doc: {ast_doc}\nfeatures: {features}\n')
 
     def test_process_cpp(self):
+        """_process_docs produces AST/features JSON for cpp source."""
         doc = Document(
             text=self.cpp_code,
             metadata={"language": "cpp", "file_name": "test.cpp"}
@@ -164,6 +170,7 @@ public:
         # print(f'ast_doc: {ast_doc}\nfeatures: {features}\n')
 
     def test_code_metrics(self):
+        """_calculate_code_metrics reports positive metrics for each language."""
         for code, language in [
             (self.py_code, "python"),
             (self.java_code, "java"),
