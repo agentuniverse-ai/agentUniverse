@@ -49,7 +49,7 @@ class MessageLibrary:
             db_session.commit()
             return message_orm.id
 
-    def delete_messages(self, session_id: str):
+    def delete_messages(self, session_id: str) -> None:
         """Delete messages from the database using the provided `session_id`."""
         with self.get_db_session() as db_session:
             message_orm_list = db_session.query(MessageORM).filter(
