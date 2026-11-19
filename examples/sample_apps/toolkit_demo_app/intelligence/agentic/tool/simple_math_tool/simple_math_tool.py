@@ -11,16 +11,20 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class AddTool(Tool):
+    """Tool that computes a simple arithmetic result from two float operands."""
     def execute(self, a: float, b: float):
+        """Return the sum of the two float operands."""
         result = a + b
         return result
 
     async def async_execute(self, a: float, b: float):
+        """Return the sum of the two float operands."""
         result = a + b
         return result
 
 
 class SubtractTool(Tool):
+    """Tool that computes a simple arithmetic result from two float operands."""
     def execute(self, a: float, b: float):
         result = a - b
         return result
@@ -31,6 +35,7 @@ class SubtractTool(Tool):
 
 
 class MultiplyTool(Tool):
+    """Tool that computes a simple arithmetic result from two float operands."""
     def execute(self, a: float, b: float):
         result = a * b
         return result
@@ -41,6 +46,7 @@ class MultiplyTool(Tool):
 
 
 class DivideTool(Tool):
+    """Tool that computes a simple arithmetic result from two float operands."""
     def execute(self, a: float, b: float):
         result = a / b
         return result
