@@ -381,6 +381,12 @@ class Knowledge(ComponentBase):
         )
 
     def create_copy(self):
+        """Create a copy of the knowledge component.
+        
+        The stores, query_paraphrasers, processor and reader list references are
+        copied (readers and ext_info are deep-copied) so the copy does not share
+        mutable state with the original.
+        """
         copied = self.model_copy()
         copied.stores = self.stores.copy()
         copied.query_paraphrasers = self.query_paraphrasers.copy()
