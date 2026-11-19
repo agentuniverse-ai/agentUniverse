@@ -9,10 +9,15 @@ import asyncio
 import functools
 import inspect
 import uuid
+from contextvars import ContextVar
 from functools import wraps
+
+from opentelemetry import context as otel_context
 
 from agentuniverse.agent.memory.conversation_memory.conversation_memory_module import \
     ConversationMemoryModule
+from agentuniverse.base.context.framework_context_manager import \
+    FrameworkContextManager
 from agentuniverse.base.config.application_configer.application_config_manager import \
     ApplicationConfigManager
 from agentuniverse.base.util.monitor.monitor import Monitor
@@ -115,10 +120,13 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
     else:
         # streaming
         async def gen_iterator():
-            async for chunk in result:
-                yield chunk
-            # add llm invocation info to monitor
-            Monitor.pop_invocation_chain()
+            try:
+                async for chunk in result:
+                    yield chunk
+            finally:
+                # add llm invocation info to monitor
+                # runs also when the consumer aborts the stream early
+                Monitor.pop_invocation_chain()
 
         return gen_iterator()
 
@@ -138,9 +146,13 @@ def _default_llm_wrapper_sync(func, *args, **kwargs):
     else:
         # streaming
         def gen_iterator():
-            for chunk in result:
-                yield chunk
-            Monitor.pop_invocation_chain()
+            try:
+                for chunk in result:
+                    yield chunk
+            finally:
+                # add llm invocation info to monitor
+                # runs also when the consumer aborts the stream early
+                Monitor.pop_invocation_chain()
 
         return gen_iterator()
 
@@ -175,6 +187,74 @@ def trace_llm(func):
 
 # trace agent
 
+# Depth of traced agent runs in the current execution context. Framework
+# context cleanup only happens when the outermost traced agent run finishes.
+_agent_scope_depth = ContextVar('_agent_scope_depth', default=0)
+
+_REQUEST_FRAMEWORK_CONTEXT_KEYS = ('session_id', 'trace_id')
+_FRAMEWORK_TRACE_KEY_SUFFIXES = ('_invocation_chain', '_invocation_chain_bak',
+                                 '_token_usage')
+
+
+def _is_trace_state_key(key: str) -> bool:
+    return key.endswith(_FRAMEWORK_TRACE_KEY_SUFFIXES)
+
+
+def _has_meaningful_state(value) -> bool:
+    """Empty monitor state is treated as absent.
+
+    Monitor.get_invocation_chain lazily creates an empty chain entry when
+    read, so an empty list must not count as pre-existing state that has to
+    survive the traced run.
+    """
+    if isinstance(value, (list, dict)):
+        return len(value) > 0
+    return value is not None
+
+
+def _snapshot_request_framework_context() -> dict:
+    """Capture the request-scoped framework context state.
+
+    'session_id' and 'trace_id' may be generated and persisted into the
+    thread level framework context while a request runs (for example by
+    ConversationMemoryModule.add_trace_info), and monitor state is stored
+    under per-trace keys. Without restoring them, a reused server thread
+    keeps the previous request's session for the next request and the trace
+    state keys accumulate forever.
+    """
+    manager = FrameworkContextManager()
+    snapshot = {key: manager.get_context(key)
+                for key in _REQUEST_FRAMEWORK_CONTEXT_KEYS
+                if manager.is_context_exist(key)}
+    for key in list(manager.context_dict.keys()):
+        if _is_trace_state_key(key):
+            value = manager.get_context(key)
+            if _has_meaningful_state(value):
+                snapshot[key] = value
+    return snapshot
+
+
+def _restore_request_framework_context(snapshot: dict):
+    """Restore the request-scoped framework context state.
+
+    Pre-existing entries (e.g. a chain set up by an enclosing caller) are
+    restored to their captured value; entries created during the traced run
+    are removed.
+    """
+    manager = FrameworkContextManager()
+    for key in _REQUEST_FRAMEWORK_CONTEXT_KEYS:
+        if key in snapshot:
+            manager.set_context(key, snapshot[key])
+        else:
+            manager.del_context(key, force=True)
+    for key in list(manager.context_dict.keys()):
+        if _is_trace_state_key(key):
+            if key in snapshot:
+                manager.set_context(key, snapshot[key])
+            else:
+                manager.del_context(key, force=True)
+
+
 def _get_agent_info(func, *args, **kwargs):
     agent_input = _get_input(func, *args, **kwargs)
     source = func.__qualname__
@@ -195,36 +275,64 @@ def _get_agent_info(func, *args, **kwargs):
 async def _default_agent_wrapper_async(func, *args, **kwargs):
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
-    with InvocationChainContext(source=source, node_type='agent'):
-        kwargs['memory_source_info'] = start_info
-        ConversationMemoryModule().add_agent_input_info(start_info,
-                                                        agent_instance,
-                                                        agent_input,
-                                                        pair_id)
-        result = await func(*args, **kwargs)
-        ConversationMemoryModule().add_agent_result_info(agent_instance,
-                                                         result,
-                                                         start_info,
-                                                         pair_id)
-        return result
+    # Agent.run may attach an OTel context derived from a caller-supplied
+    # trace_id. Restore the previous context afterwards so server threads do
+    # not carry one request's trace into the next request.
+    saved_otel_context = otel_context.get_current()
+    is_outermost = _agent_scope_depth.get() == 0
+    saved_framework_context = (_snapshot_request_framework_context()
+                               if is_outermost else None)
+    depth_token = _agent_scope_depth.set(_agent_scope_depth.get() + 1)
+    try:
+        with InvocationChainContext(source=source, node_type='agent'):
+            kwargs['memory_source_info'] = start_info
+            ConversationMemoryModule().add_agent_input_info(start_info,
+                                                            agent_instance,
+                                                            agent_input,
+                                                            pair_id)
+            result = await func(*args, **kwargs)
+            ConversationMemoryModule().add_agent_result_info(agent_instance,
+                                                             result,
+                                                             start_info,
+                                                             pair_id)
+            return result
+    finally:
+        _agent_scope_depth.reset(depth_token)
+        otel_context.attach(saved_otel_context)
+        if is_outermost:
+            _restore_request_framework_context(saved_framework_context)
 
 
 def _default_agent_wrapper_sync(func, *args, **kwargs):
     # get agent input from arguments
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
-    with InvocationChainContext(source=source, node_type='agent'):
-        kwargs['memory_source_info'] = start_info
-        ConversationMemoryModule().add_agent_input_info(start_info,
-                                                        agent_instance,
-                                                        agent_input,
-                                                        pair_id)
-        result = func(*args, **kwargs)
-        ConversationMemoryModule().add_agent_result_info(agent_instance,
-                                                         result,
-                                                         start_info,
-                                                         pair_id)
-        return result
+    # See _default_agent_wrapper_async: restore the OTel context that was
+    # current before this traced agent run, and clear request-scoped
+    # framework context entries at the outermost run.
+    saved_otel_context = otel_context.get_current()
+    is_outermost = _agent_scope_depth.get() == 0
+    saved_framework_context = (_snapshot_request_framework_context()
+                               if is_outermost else None)
+    depth_token = _agent_scope_depth.set(_agent_scope_depth.get() + 1)
+    try:
+        with InvocationChainContext(source=source, node_type='agent'):
+            kwargs['memory_source_info'] = start_info
+            ConversationMemoryModule().add_agent_input_info(start_info,
+                                                            agent_instance,
+                                                            agent_input,
+                                                            pair_id)
+            result = func(*args, **kwargs)
+            ConversationMemoryModule().add_agent_result_info(agent_instance,
+                                                             result,
+                                                             start_info,
+                                                             pair_id)
+            return result
+    finally:
+        _agent_scope_depth.reset(depth_token)
+        otel_context.attach(saved_otel_context)
+        if is_outermost:
+            _restore_request_framework_context(saved_framework_context)
 
 
 _agent_wrapper_async = _default_agent_wrapper_async
