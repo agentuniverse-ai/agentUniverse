@@ -63,6 +63,16 @@ class TestContextManager:
         assert window.reserved_tokens == 1000
         assert window.total_tokens == 0
 
+    def test_create_context_window_allows_zero_reserved_tokens(self, manager):
+        """An explicit zero reserve should override task and manager defaults."""
+        window = manager.create_context_window(
+            session_id="session_1",
+            reserved_tokens=0,
+        )
+
+        assert window.reserved_tokens == 0
+        assert window.calculate_input_tokens() == window.max_tokens
+
     def test_create_context_window_code_generation(self, manager):
         """Test creating context window for code generation task."""
         window = manager.create_context_window(

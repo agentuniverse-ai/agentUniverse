@@ -179,8 +179,16 @@ class ContextManager(ComponentBase):
         # Get task-specific configuration
         task_config = self.task_configs.get(task_type or "dialogue", {})
 
-        max_tokens = kwargs.get("max_tokens") or task_config.get("max_tokens", self.default_max_tokens)
-        reserved_tokens = kwargs.get("reserved_tokens") or task_config.get("reserved_tokens", self.default_reserved_tokens)
+        max_tokens = (
+            kwargs["max_tokens"]
+            if kwargs.get("max_tokens") is not None
+            else task_config.get("max_tokens", self.default_max_tokens)
+        )
+        reserved_tokens = (
+            kwargs["reserved_tokens"]
+            if kwargs.get("reserved_tokens") is not None
+            else task_config.get("reserved_tokens", self.default_reserved_tokens)
+        )
 
         # Calculate component budgets based on task ratios
         input_budget = max_tokens - reserved_tokens
