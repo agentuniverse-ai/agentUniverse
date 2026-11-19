@@ -21,6 +21,8 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 from agentuniverse.base.component.component_configer_util import ComponentConfigerUtil
 from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
 from agentuniverse.base.config.configer import Configer
+from agentuniverse.base.config.repository.base import ConfigRepository
+from agentuniverse.base.config.repository.integration import merge_repository_configers
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
 from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -60,11 +62,24 @@ class AgentUniverse(object):
         self.__system_default_memory_storage_package = ['agentuniverse.agent.memory.memory_storage']
         self.__system_default_work_pattern_package = ['agentuniverse.agent.work_pattern']
         self.__system_default_log_sink_package = ['agentuniverse.base.util.logging.log_sink.log_sink']
+        self.__component_config_repository = None
+        self.__component_config_environment = 'default'
 
-    def start(self, config_path: str = None, core_mode: bool = False):
+    def start(self, config_path: str = None, core_mode: bool = False,
+              component_config_repository: ConfigRepository = None,
+              config_environment: str = 'default'):
         """Start the agentUniverse framework.
 
+        Args:
+            config_path: Main application TOML path.
+            core_mode: Execute post-fork hooks immediately.
+            component_config_repository: Optional versioned source whose values
+                overlay YAML components and may define database-only components.
+            config_environment: Repository environment to load.
+
         """
+        self.__component_config_repository = component_config_repository
+        self.__component_config_environment = config_environment
         character_util.show_au_start_banner()
         # get default config path
         project_root_path = get_project_root_path()
@@ -216,7 +231,11 @@ class AgentUniverse(object):
         for component_enum, package_list in component_package_map.items():
             if not package_list:
                 continue
-            component_configer_list = self.scan(package_list, ConfigTypeEnum.YAML, component_enum)
+            component_configer_list = self.scan(
+                package_list, ConfigTypeEnum.YAML, component_enum,
+                self.__component_config_repository,
+                self.__component_config_environment,
+            )
             component_configer_list_map[component_enum] = component_configer_list
 
         for component_enum, component_configer_list in component_configer_list_map.items():
@@ -225,7 +244,9 @@ class AgentUniverse(object):
     def scan(self,
              package_list: [str],
              config_type_enum: ConfigTypeEnum,
-             component_enum: ComponentEnum) -> list:
+             component_enum: ComponentEnum,
+             component_config_repository: ConfigRepository = None,
+             config_environment: str = 'default') -> list:
         """Scan the component directory and return certain component configer list.
 
         Args:
@@ -267,6 +288,16 @@ class AgentUniverse(object):
                 component_config_type = component_configer.get_component_config_type()
                 if component_config_type == component_enum.value:
                     component_configer_list.append(component_configer)
+        if component_config_repository is not None:
+            file_configers = [item.configer for item in component_configer_list]
+            merged = merge_repository_configers(
+                file_configers, component_config_repository,
+                component_enum.value, config_environment,
+            )
+            component_configer_list = [
+                ComponentConfiger().load_by_configer(configer)
+                for configer in merged
+            ]
         return component_configer_list
 
     def __register(self, component_enum: ComponentEnum, component_configer_list: list[ComponentConfiger]):
