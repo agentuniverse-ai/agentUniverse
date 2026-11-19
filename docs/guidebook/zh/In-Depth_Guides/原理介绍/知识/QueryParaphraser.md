@@ -80,3 +80,34 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.query_paraphraser.query_keyword_extractor'
   class: 'QueryKeywordExtractor'
 ```
+
+### [hyde_query_paraphraser](../../../../../../agentuniverse/agent/action/knowledge/query_paraphraser/hyde_query_paraphraser.yaml)
+该组件实现 HyDE（Hypothetical Document Embeddings，假设性文档嵌入）查询改写：请一个已注册的 LLM 组件针对用户查询撰写一段或多段简短的*假设性段落*，并用它们改写 Query，使稠密检索去匹配"答案形态"的文本而非裸问题（弥合查询与文档之间的形态不对称）。
+
+改写遵循框架的 Query 契约：`query_str` 被改写（`append` 模式 = 原始查询 + 假设段落，默认混合形态；`replace` 模式 = 仅保留假设段落，即经典 HyDE 形态）；每个段落同时追加进 `query_text_bundles`；未改动的原始查询与生成的段落分别记录在 `ext_info` 的 `hyde_origin_query_str` / `hyde_documents` 键下，供后续环节（融合、重排、日志）使用。
+
+扩展按设计是"尽力而为"：查询为空、未配置 `llm_model`、LLM 调用失败或生成内容为空时，一律退化为原样透传并记录告警——检索绝不会因为*增强*失败而中断。配置错误则相反，会在组件加载时快速失败（未知 `mode`、`num_docs` 超出 [1, 5]、非正的 `max_doc_chars`、自定义 `prompt_template` 缺少字面量 `{query}` 占位符）。
+
+生成是有界的：`num_docs`（1-5）个段落、每段一次 LLM 调用（单次失败不影响其余段落）、每段按 `max_doc_chars` 硬截断、重复段落自动去除。LLM 输出只被当作检索文本——不会被执行，也不会被解析为结构化数据。
+
+组件定义文件如下：
+```yaml
+name: 'hyde_query_paraphraser'
+description: '使用 LLM 生成假设性段落的 HyDE 查询改写'
+llm_model: ''            # 已注册的 LLM 组件名，如 'default_openai_llm'
+num_docs: 1              # 生成段落数，取值 [1, 5]
+mode: 'append'           # append（原始查询+段落）| replace（经典 HyDE）
+max_doc_chars: 2000      # 每段硬截断上限
+origin_query_key: 'hyde_origin_query_str'
+documents_key: 'hyde_documents'
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.hyde_query_paraphraser'
+  class: 'HyDEQueryParaphraser'
+```
+- llm_model: 用于生成假设性段落的已注册 LLM 组件名。为空时查询原样透传（并告警），因此内置定义无需任何模型凭据即可加载。
+- num_docs: 生成的假设段落数量，取值 [1, 5]；每段一次 LLM 调用，重复段落自动去除。
+- mode: `append`（默认）把 `query_str` 改写为"原始查询 + 假设段落"；`replace` 只保留假设段落（经典 HyDE 形态）。
+- max_doc_chars: 每个段落在进入查询或嵌入模型前的硬截断上限。
+- prompt_template: 自定义用户提示模板；必须包含字面量 `{query}` 占位符（通过 `str.replace` 替换，模板中其它花括号不受影响）。默认使用"以查询语言作答"的内置指令。
+- origin_query_key / documents_key: 记录未改动原始查询与生成段落列表的 `ext_info` 键名。
