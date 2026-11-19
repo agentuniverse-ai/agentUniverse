@@ -14,6 +14,7 @@ def singleton(cls):
 
     @wraps(cls)
     def get_instance(*args, **kwargs):
+        """Return the singleton instance of the decorated class, creating it on the first call."""
         if cls not in instances:
             instances[cls] = cls(*args, **kwargs)
         return instances[cls]
