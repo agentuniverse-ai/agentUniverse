@@ -26,5 +26,7 @@ class GoogleSearchTool(Tool):
 
     def execute(self, input: str):
         # get top10 results from Google search.
+        """Execute the tool with the given input and return the result.
+        """
         search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
         return search.run(query=input)
