@@ -132,7 +132,7 @@ class ChromaStore(Store):
         """Upsert document into the store."""
         for document in documents:
             embedding = document.embedding
-            if self.embedding_model is not None and len(embedding) == 0:
+            if self.embedding_model is not None and not embedding:
                 embedding = EmbeddingManager().get_instance_obj(
                     self.embedding_model
                 ).get_embeddings([document.text])[0]
