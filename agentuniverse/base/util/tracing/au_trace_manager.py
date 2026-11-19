@@ -11,6 +11,20 @@ from agentuniverse.base.tracing import au_trace_manager as new_module
 
 
 def __getattr__(name):
+    """Module-level shim forwarding deprecated attribute lookups to the new module.
+
+    Emits a DeprecationWarning and returns the requested attribute from the new
+    tracing module when present; raises AttributeError otherwise.
+
+    Args:
+        name: The name of the missing module attribute.
+
+    Returns:
+        The attribute value forwarded from the new module location.
+
+    Raises:
+        AttributeError: If the attribute is absent from the new module.
+    """
     if hasattr(new_module, name):
         warnings.warn(
             f"Importing {name} from 'agentuniverse.base.util.tracing.au_trace_manager' "
