@@ -231,9 +231,9 @@ class SqliteMemoryStorage(MemoryStorage):
                                         target_type_col == ConversationMessageSourceType.AGENT.value)
                 agent_id_col = or_(source_condition, target_condition)
 
-                query.filter(agent_id_col)
+                query = query.filter(agent_id_col)
             if trace_id is not None:
-                query.filter(getattr(model_class, 'trace_id') == trace_id)
+                query = query.filter(model_class.trace_id == trace_id)
 
             # execute delete and commit the session
             query.delete(synchronize_session=False)
