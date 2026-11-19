@@ -82,11 +82,14 @@ class SessionLibrary:
             else:
                 return None
 
-    def get_session_list(self, agent_id: str) -> list[SessionDO]:
+    def get_session_list(self, agent_id: str, limit: int = None) -> list[SessionDO]:
         """Get a list of sessions from the database using the provided `agent_id`."""
         with self.get_db_session() as db_session:
-            session_orm_list = db_session.query(SessionORM).filter(
-                SessionORM.agent_id == agent_id).order_by(desc(SessionORM.gmt_modified)).all()
+            query = db_session.query(SessionORM).filter(
+                SessionORM.agent_id == agent_id).order_by(desc(SessionORM.gmt_modified), desc(SessionORM.id))
+            if limit is not None:
+                query = query.limit(limit)
+            session_orm_list = query.all()
             res = []
             if session_orm_list:
                 for session_orm in session_orm_list:
