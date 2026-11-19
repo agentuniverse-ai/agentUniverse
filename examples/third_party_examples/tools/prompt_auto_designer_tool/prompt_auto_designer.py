@@ -79,6 +79,9 @@ class PromptAutoDesigner:
         llm_name: Optional[str] = None,
         llm_factory: Optional[Callable[[], LLM]] = None,
     ):
+        """Create a PromptAutoDesigner with the generation/optimization prompt
+        versions, an optional LLM name and an optional LLM factory.
+        """
         self.generation_prompt_version = generation_prompt_version
         self.optimization_prompt_version = optimization_prompt_version
         self.llm_name = llm_name
@@ -116,6 +119,9 @@ class PromptAutoDesigner:
         )
 
     def _invoke_llm(self, prompt_version: str, payload: dict[str, Any]) -> str:
+        """Invoke the LLM chain for the given prompt version and payload, raising
+        PromptAutoDesignerError when the LLM call fails.
+        """
         prompt = self._get_prompt(prompt_version)
         llm = self._resolve_llm()
         chain = prompt.as_langchain() | llm.as_langchain_runnable()
@@ -127,6 +133,9 @@ class PromptAutoDesigner:
             ) from exc
 
     def _resolve_llm(self) -> LLM:
+        """Return the configured LLM instance, raising PromptAutoDesignerError when
+        no instance is available or the resolved type is not an LLM.
+        """
         if self._llm_factory:
             llm = self._llm_factory()
         else:
@@ -139,12 +148,16 @@ class PromptAutoDesigner:
         return llm
 
     def _get_prompt(self, version: str) -> Prompt:
+        """Load and return a copy of the prompt registered under the given version,
+        raising PromptAutoDesignerError when it is not registered.
+        """
         prompt = PromptManager().get_instance_obj(version)
         if prompt is None:
             raise PromptAutoDesignerError(f"未注册 prompt 版本：{version}")
         return prompt.create_copy()
 
     def _build_generation_payload(self, request: PromptGenerationRequest) -> dict[str, str]:
+        """Build the generation prompt payload dict from the given request."""
         return {
             "scenario": request.scenario,
             "objective": request.objective,
@@ -159,6 +172,7 @@ class PromptAutoDesigner:
         }
 
     def _build_optimization_payload(self, request: PromptOptimizationRequest) -> dict[str, str]:
+        """Build the optimization prompt payload dict from the given request."""
         current_prompt = generate_template(request.prompt, ["introduction", "target", "instruction"]).strip()
         return {
             "current_prompt": current_prompt or "当前提示词为空",
