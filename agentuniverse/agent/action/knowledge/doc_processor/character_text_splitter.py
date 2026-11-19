@@ -76,4 +76,5 @@ class CharacterTextSplitter(DocProcessor):
             self.chunk_overlap = doc_processor_configer.chunk_overlap
         if hasattr(doc_processor_configer, "separator"):
             self.separator = doc_processor_configer.separator
+        self.__splitter = None
         return self

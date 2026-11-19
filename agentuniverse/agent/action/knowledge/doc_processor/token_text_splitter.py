@@ -72,4 +72,5 @@ class TokenTextSplitter(DocProcessor):
             self.encoding_name = doc_processor_configer.encoding_name
         if hasattr(doc_processor_configer, "model_name"):
             self.model_name = doc_processor_configer.model_name
+        self.__splitter = None
         return self
