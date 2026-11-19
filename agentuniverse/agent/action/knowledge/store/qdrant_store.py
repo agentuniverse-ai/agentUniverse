@@ -122,9 +122,11 @@ class QdrantStore(Store):
         return self.to_documents(results)
 
     def insert_document(self, documents: List[Document], **kwargs):
+        """Insert the documents by delegating to upsert_document. Args: documents (List[Document]): The documents to persist. **kwargs: Extra options."""
         self.upsert_document(documents, **kwargs)
 
     def upsert_document(self, documents: List[Document], **kwargs):
+        """Upsert the documents with their embeddings, generating embeddings with the configured model for documents that carry none. Args: documents (List[Document]): The documents to persist. **kwargs: Extra options."""
         if self.client is None:
             return
 
@@ -156,15 +158,18 @@ class QdrantStore(Store):
             self.client.upsert(collection_name=self.collection_name, points=points)
 
     def update_document(self, documents: List[Document], **kwargs):
+        """Update the documents by delegating to upsert_document. Args: documents (List[Document]): The documents to update. **kwargs: Extra options."""
         self.upsert_document(documents, **kwargs)
 
     def delete_document(self, document_id: str, **kwargs):
+        """Delete the stored point with the given document id. Args: document_id (str): The document id. **kwargs: Extra options."""
         if self.client is None:
             return
         self.client.delete(collection_name=self.collection_name, points_selector=[document_id])
 
     @staticmethod
     def to_documents(results) -> List[Document]:
+        """Convert Qdrant scored points into Documents, reading text, metadata and the vector from the point payload. Args: results: The scored points returned by Qdrant. Returns: List[Document]: The documents."""
         if results is None:
             return []
         documents: List[Document] = []
