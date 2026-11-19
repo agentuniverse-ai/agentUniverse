@@ -67,6 +67,15 @@ class FAISSStore(Store):
     _next_index: int = 0
 
     def __init__(self, **kwargs):
+        """Initialize the FAISS store and its in-memory state.
+
+        Resets the document storage, id/index mappings and the next-index
+        counter, and applies the default index configuration when none has
+        been provided.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments forwarded to the parent store.
+        """
         super().__init__(**kwargs)
         self.document_store = {}
         self.id_to_index = {}
