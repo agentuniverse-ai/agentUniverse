@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class PlannerDTO(BaseModel):
+    """DTO model describing a planner.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="planner nickname", default="")
     members: Optional[list] = Field(description="planner members", default=[])
