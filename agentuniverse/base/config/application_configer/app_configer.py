@@ -197,34 +197,86 @@ class AppConfiger(object):
 
     @property
     def default_llm_configer(self) -> DefaultLLMConfiger:
+        """Return the default LLM configer.
+
+        Returns:
+            DefaultLLMConfiger: the default LLM configer, or None if not set.
+        """
         return self.__default_llm_configer
 
     @default_llm_configer.setter
     def default_llm_configer(self, value: DefaultLLMConfiger):
+        """Set the default LLM configer to the given value.
+
+        Args:
+            value: the default LLM configer to store.
+
+        Returns:
+            None.
+        """
         self.__default_llm_configer = value
 
     @property
     def tool_configer_map(self) -> Dict[str, ToolConfiger]:
+        """Return the map of tool configers.
+
+        Returns:
+            Dict[str, ToolConfiger]: mapping of tool names to their ToolConfiger instances; empty dict when none are registered.
+        """
         return self.__tool_configer_map
 
     @tool_configer_map.setter
     def tool_configer_map(self, value: Dict[str, ToolConfiger]):
+        """Set the tool configer map to the given value.
+
+        Args:
+            value: mapping of tool names to their ToolConfiger instances.
+
+        Returns:
+            None.
+        """
         self.__tool_configer_map = value
 
     @property
     def toolkit_configer_map(self) -> Dict[str, ComponentConfiger]:
+        """Return the map of toolkit configers.
+
+        Returns:
+            Dict[str, ComponentConfiger]: mapping of toolkit names to their ComponentConfiger instances; empty dict when none are registered.
+        """
         return self.__toolkit_configer_map
 
     @toolkit_configer_map.setter
     def toolkit_configer_map(self, value: Dict[str, ComponentConfiger]):
+        """Set the toolkit configer map to the given value.
+
+        Args:
+            value: mapping of toolkit names to their ComponentConfiger instances.
+
+        Returns:
+            None.
+        """
         self.__toolkit_configer_map = value
 
     @property
     def llm_configer_map(self) -> Dict[str, LLMConfiger]:
+        """Return the map of LLM configers.
+
+        Returns:
+            Dict[str, LLMConfiger]: mapping of LLM names to their LLMConfiger instances; empty dict when none are registered.
+        """
         return self.__llm_configer_map
 
     @llm_configer_map.setter
     def llm_configer_map(self, value: Dict[str, LLMConfiger]):
+        """Set the LLM configer map to the given value.
+
+        Args:
+            value: mapping of LLM names to their LLMConfiger instances.
+
+        Returns:
+            None.
+        """
         self.__llm_configer_map = value
 
     @property
