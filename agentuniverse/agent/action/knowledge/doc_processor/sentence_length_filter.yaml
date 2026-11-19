@@ -1,0 +1,29 @@
+name: 'sentence_length_filter'
+description: 'tag or drop statistical sentence-length outliers (boilerplate runs, legal disclaimers, table dumps) inside prose'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_length_filter'
+  class: 'SentenceLengthFilter'
+
+# A sentence is an outlier when its character length is STRICTLY GREATER
+# than mean + k * stdev (population stdev over the document's own
+# sentences) OR strictly greater than max_chars. Exactly-at-threshold is
+# not an outlier. Must be > 0.
+k: 2.0
+
+# Absolute cap on sentence character length, applied regardless of
+# statistics — the backstop for short documents and uniformly inflated
+# ones. Must be >= 1.
+max_chars: 500
+
+# Minimum number of sentences for the statistical rule to apply; with
+# fewer sentences only the absolute cap applies. Must be >= 1.
+min_sentences: 3
+
+# What to do with outliers: 'tag' stamps metadata['sentence_outliers']
+# and leaves the text untouched; 'drop' removes outlier sentences and
+# rejoins survivors with single spaces (recording removed count and, up
+# to 10, removed texts in metadata); 'keep_only' keeps just the outliers
+# — the boilerplate-inspection mode.
+mode: 'tag'
