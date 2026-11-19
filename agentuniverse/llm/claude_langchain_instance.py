@@ -26,6 +26,11 @@ class ClaudeLangChainInstance(ChatAnthropic):
     llm: LLM = None
 
     def __init__(self, llm: LLM):
+        """Build the langchain ChatAnthropic init params from the given agentUniverse LLM and initialize the parent class.
+
+        Args:
+            llm(LLM): The agentUniverse LLM instance carrying the model configuration.
+        """
         init_params = {}
         init_params['model'] = llm.model_name if llm.model_name else 'Claude-Instant-V1.3'
         init_params['temperature'] = llm.temperature if llm.temperature else 0.7
@@ -46,6 +51,17 @@ class ClaudeLangChainInstance(ChatAnthropic):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> ChatResult:
+        """Generate a chat completion, swapping a second SystemMessage for a HumanMessage and streaming when enabled.
+
+        Args:
+            messages(List[BaseMessage]): The input messages.
+            stop(Optional[List[str]]): Optional stop sequences.
+            run_manager(Optional[CallbackManagerForLLMRun]): The callback manager.
+            **kwargs: Additional generation parameters.
+
+        Returns:
+            ChatResult: The generated result.
+        """
         if len(messages) > 1 and isinstance(messages[1], SystemMessage):
             messages[1] = HumanMessage(content=messages[1].content)
         params = self._format_params(messages=messages, stop=stop, **kwargs)
@@ -72,6 +88,17 @@ class ClaudeLangChainInstance(ChatAnthropic):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> ChatResult:
+        """Asynchronously generate a chat completion, swapping a second SystemMessage for a HumanMessage and streaming when enabled.
+
+        Args:
+            messages(List[BaseMessage]): The input messages.
+            stop(Optional[List[str]]): Optional stop sequences.
+            run_manager(Optional[AsyncCallbackManagerForLLMRun]): The callback manager.
+            **kwargs: Additional generation parameters.
+
+        Returns:
+            ChatResult: The generated result.
+        """
         if len(messages) > 1 and isinstance(messages[1], SystemMessage):
             messages[1] = HumanMessage(content=messages[1].content)
         params = self._format_params(messages=messages, stop=stop, **kwargs)
