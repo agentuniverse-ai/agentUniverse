@@ -1,0 +1,20 @@
+name: 'sensitive_word_filter'
+description: 'Apply an operator-owned multilingual sensitive-word policy to Knowledge documents.'
+
+# This built-in definition is intentionally disabled and contains no policy
+# vocabulary. Copy it into the application DocProcessor package, set enabled to
+# true, and provide inline words and/or UTF-8 word-list files.
+enabled: false
+words: []
+word_list_paths: []
+
+action: 'mask'                  # mask | drop_document | raise
+replacement: '[FILTERED]'       # used only by the mask action
+case_sensitive: false
+ascii_word_boundary: true       # ASCII terms match whole words; CJK uses substrings
+metadata_key: 'sensitive_word_filter'  # aggregate action/count only; null to omit
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
