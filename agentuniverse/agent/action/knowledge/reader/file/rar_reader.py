@@ -248,8 +248,6 @@ class RarReader(Reader):
             self._reader_cache[suffix] = reader_class
             return reader_class()
 
-        return None
-
     def _get_reader_class(self, suffix: str) -> Optional[Type[Reader]]:
         """Map file extension to reader class."""
         reader_map = {
