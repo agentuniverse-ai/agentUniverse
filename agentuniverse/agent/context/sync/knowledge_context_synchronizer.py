@@ -184,7 +184,7 @@ class KnowledgeContextSynchronizer:
                 )
             )
 
-            self.context_manager.add_context(
+            stored_segment = self.context_manager.add_context(
                 session_id,
                 segment.content,
                 segment.type,
@@ -192,7 +192,7 @@ class KnowledgeContextSynchronizer:
                 metadata=segment.metadata.model_dump()
             )
 
-            new_segment_ids.append(segment.id)
+            new_segment_ids.append(stored_segment.id)
             result.segments_added += 1
 
         # Update mapping
