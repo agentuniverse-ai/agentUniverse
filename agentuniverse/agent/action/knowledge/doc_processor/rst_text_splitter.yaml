@@ -1,0 +1,21 @@
+name: 'rst_text_splitter'
+description: 'Split reStructuredText documents into one chunk per section title, preserving each section hierarchy (e.g. "Usage > CLI") as metadata. Pure-Python, no external dependency.'
+
+# Metadata key under which the joined section hierarchy of a chunk is
+# recorded (e.g. "Usage > CLI"). Set to null to omit the field.
+section_path_key: 'section_path'
+
+# Deepest section level to split on; level 1 is the document's first
+# adornment style, and every new adornment character opens one level
+# deeper (the docutils rule). Titles deeper than max_depth stay ordinary
+# content of their parent section. null splits on every level.
+max_depth: null
+
+# When true, content before the first section title is emitted as its own
+# chunk (with an empty section path); when false it is dropped.
+keep_preamble: true
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.rst_text_splitter'
+  class: 'RstTextSplitter'
