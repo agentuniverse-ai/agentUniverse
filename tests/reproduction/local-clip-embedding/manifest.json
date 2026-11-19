@@ -1,0 +1,16 @@
+{
+  "feature": "feat(embedding): add pinned local CPU CLIP image and text vectors",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4224",
+  "tested_code_commit": "aa112046713df2c9fa225147e86c92fd76e37330",
+  "tests": [
+    "tests/test_agentuniverse/integration/test_local_clip_live.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/store/test_document.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {
+    "HF_HUB_OFFLINE": "1"
+  },
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
