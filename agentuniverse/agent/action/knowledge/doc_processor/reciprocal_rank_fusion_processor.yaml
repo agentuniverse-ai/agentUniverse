@@ -36,3 +36,11 @@ top_n: null
 
 # Metadata key the fused score is written into on each returned document.
 score_field: 'relevance_score'
+
+# Optional extension: omitted channels retain unit weight; zero disables a channel.
+# Keep this empty for the original unweighted RRF behavior. Tune weights on held-out
+# labels, not on the evaluation set; a larger weight can also worsen ranking.
+channel_weights: {}
+explain: false
+explanation_field: fusion_details
+max_explanation_channels: 32
