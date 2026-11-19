@@ -21,6 +21,9 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 class ContextualIterationAgentTemplate(AgentTemplate):
+    """Agent template that answers through an initial LLM call followed by up to `iteration` continuation calls.
+    Each continuation appends to the accumulated answer and the chat history; an optional if_loop judge can stop the loop early.
+    """
     iteration: int = 0
     continue_prompt_version: Optional[str] = None
     if_loop_prompt_version: Optional[str] = None
@@ -29,17 +32,25 @@ class ContextualIterationAgentTemplate(AgentTemplate):
         return ['input']
 
     def output_keys(self) -> list[str]:
+        """Return the output keys of the agent (['output'])."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Populate the agent input with the user input from the input object."""
         agent_input['input'] = input_object.get_data('input')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return a copy of the agent result whose 'output' key holds the output value."""
         return {**agent_result, 'output': agent_result['output']}
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Run the synchronous contextual-iteration flow: a first LLM call, then up to `iteration` continuation rounds extending the chat history, stopping early when the if_loop judge answers no.
+
+        Returns:
+        dict: Agent input extended with the accumulated answer under 'output'.
+        """
         assemble_memory_input(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile,
                           agent_input)
@@ -110,6 +121,11 @@ class ContextualIterationAgentTemplate(AgentTemplate):
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
                                        prompt: Prompt, **kwargs) -> dict:
 
+        """Async variant of customized_execute running the same iteration flow through async chain invocation.
+
+        Returns:
+        dict: Agent input extended with the accumulated answer under 'output'.
+        """
         assemble_memory_input(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile,
                           agent_input)
@@ -182,9 +198,19 @@ class ContextualIterationAgentTemplate(AgentTemplate):
         return {**agent_input, 'output': res}
 
     def if_loop(self, loop_res: str):
+        """Decide whether the iteration should continue: True when the loop judge's reply contains 'yes'.
+
+        Args:
+        loop_res: Raw reply of the if_loop judge.
+        Returns:
+        bool: Whether to keep iterating.
+        """
         return 'yes' in loop_res
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'RagAgentTemplate':
+        """Read iteration, continue_prompt_version and if_loop_prompt_version settings from the component configer.
+        Logs an error when iteration is enabled without a configured continue prompt version; returns self.
+        """
         super().initialize_by_component_configer(component_configer)
         if hasattr(component_configer, "iteration"):
             self.iteration = component_configer.iteration
