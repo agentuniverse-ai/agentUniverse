@@ -1,0 +1,60 @@
+name: conflict_parser_tool
+description: Merge-conflict parser tool — pure Python stdlib, no network required. Parses git merge/diff3 conflict markers into structured regions (mode='parse'), reports conflict statistics with a trivially-resolvable overlap hint (mode='stats'), applies programmatic resolutions choosing ours/theirs/base/custom or the identical shortcut (mode='resolve'), or naively strips markers keeping one side (mode='strip', lossy).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.conflict_parser_tool
+  class: ConflictParserTool
+input_keys:
+  - mode
+max_text_chars: 100000
+args_model:
+  mode:
+    type: string
+    description: Conflict mode — parse, stats, resolve or strip.
+    required: true
+  text:
+    type: string
+    description: The document text to process. May be empty (no conflicts); both merge-style (<<<<<<< / ======= / >>>>>>>) and diff3-style (with an extra ||||||| base section) markers are understood.
+    required: false
+  resolutions:
+    type: array
+    description: resolve mode only — list of {index, choose, custom_text} entries applied in index order. choose is ours, theirs, base (diff3-style conflicts only), custom (requires custom_text) or identical (trivial conflicts whose ours and theirs sides match).
+    required: false
+  keep:
+    type: string
+    description: strip mode only — the side kept when conflict markers are removed, ours (default) or theirs. Lossy: the other side is dropped without inspection.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "stats", "resolve", "strip"]
+      description: Conflict mode.
+    text:
+      type: string
+      description: Document text to parse / inspect / resolve / strip.
+    resolutions:
+      type: array
+      description: Per-conflict resolutions (resolve mode).
+      items:
+        type: object
+        properties:
+          index:
+            type: integer
+            minimum: 0
+            description: 0-based position of the conflict in the parsed list.
+          choose:
+            type: string
+            enum: ["ours", "theirs", "base", "custom", "identical"]
+            description: Which side (or text) replaces the conflict block.
+          custom_text:
+            type: string
+            description: Exact replacement text for the conflict block (choose='custom' only); the closing marker's line terminator is appended, unless custom_text is empty, which removes the block entirely.
+        required: ["index", "choose"]
+    keep:
+      type: string
+      enum: ["ours", "theirs"]
+      description: Side kept when stripping markers (strip mode).
+  required: ["mode"]
