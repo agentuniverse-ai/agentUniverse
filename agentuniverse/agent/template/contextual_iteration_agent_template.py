@@ -26,6 +26,7 @@ class ContextualIterationAgentTemplate(AgentTemplate):
     if_loop_prompt_version: Optional[str] = None
 
     def input_keys(self) -> list[str]:
+        """Return the input keys of the agent: 'input'."""
         return ['input']
 
     def output_keys(self) -> list[str]:
