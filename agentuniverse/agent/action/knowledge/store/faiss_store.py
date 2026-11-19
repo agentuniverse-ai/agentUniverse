@@ -282,7 +282,7 @@ class FAISSStore(Store):
             logger.exception("Error during FAISS search")
             return []
 
-    def insert_document(self, documents: List[Document], **kwargs):  # noqa: C901
+    def insert_document(self, documents: List[Document], **kwargs) -> None:  # noqa: C901
         """Insert documents into the FAISS index.
 
         Args:
@@ -356,7 +356,7 @@ class FAISSStore(Store):
         # Save to disk
         self._save_index_and_metadata()
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
         """Upsert documents into the FAISS index."""
         # For FAISS, we need to delete and re-insert for updates
         docs_to_insert = []
@@ -376,12 +376,12 @@ class FAISSStore(Store):
         all_docs = docs_to_update + docs_to_insert
         self.insert_document(all_docs, **kwargs)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         """Update documents in the FAISS index."""
         # For FAISS, update is the same as upsert
         self.upsert_document(documents, **kwargs)
 
-    def delete_document(self, document_id: str, **kwargs):
+    def delete_document(self, document_id: str, **kwargs) -> None:
         """Delete a document from the FAISS index.
 
         Note: FAISS doesn't support direct deletion, so we rebuild the index
