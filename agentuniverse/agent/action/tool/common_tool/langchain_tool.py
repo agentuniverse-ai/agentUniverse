@@ -41,7 +41,7 @@ class LangChainTool(Tool):
         self.get_langchain_tool(init_params, clz)
         return self.tool
 
-    def get_langchain_tool(self, init_params: dict, clz: Type[BaseTool]):
+    def get_langchain_tool(self, init_params: dict, clz: Type[BaseTool]) -> None:
         if init_params:
             self.tool = clz(**init_params)
         else:
