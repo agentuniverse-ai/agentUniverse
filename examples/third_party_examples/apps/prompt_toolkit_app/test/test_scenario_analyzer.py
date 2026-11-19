@@ -18,7 +18,7 @@ from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analy
 class TestScenarioAnalyzer(unittest.TestCase):
     """Test cases for ScenarioAnalyzer class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.analyzer = ScenarioAnalyzer()
         self.sample_content = "我需要一个编程助手来帮助我写Python代码"
@@ -28,7 +28,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             "target_audience": "初学者"
         }
     
-    def test_analyze_scenario_basic(self):
+    def test_analyze_scenario_basic(self) -> None:
         """Test basic scenario analysis."""
         result = self.analyzer.analyze_scenario(self.sample_content)
         
@@ -41,7 +41,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         self.assertIsInstance(result.suggestions, list)
         self.assertIsInstance(result.complexity_level, PromptComplexity)
     
-    def test_analyze_scenario_with_additional_context(self):
+    def test_analyze_scenario_with_additional_context(self) -> None:
         """Test scenario analysis with additional context."""
         result = self.analyzer.analyze_scenario(
             self.sample_content,
@@ -51,7 +51,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         self.assertIsInstance(result, ScenarioAnalysisResult)
         self.assertIsInstance(result.recommended_scenario, PromptScenario)
     
-    def test_extract_context_from_content(self):
+    def test_extract_context_from_content(self) -> None:
         """Test context extraction from content."""
         context = self.analyzer.extract_context_from_content(self.sample_content)
         
@@ -62,7 +62,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         self.assertIsInstance(context.examples, list)
         self.assertIsInstance(context.tone, str)
     
-    def test_extract_domain(self):
+    def test_extract_domain(self) -> None:
         """Test domain extraction."""
         # Test technical domain
         content = "我需要一个编程助手"
@@ -76,7 +76,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.source, str)
             self.assertIsInstance(context.suggestions, list)
     
-    def test_extract_user_role(self):
+    def test_extract_user_role(self) -> None:
         """Test user role extraction."""
         content = "我是一个学生，需要学习编程"
         context = self.analyzer._extract_user_role(content)
@@ -87,7 +87,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.value, str)
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
-    def test_extract_target_audience(self):
+    def test_extract_target_audience(self) -> None:
         """Test target audience extraction."""
         content = "我需要为初学者设计一个教程"
         context = self.analyzer._extract_target_audience(content)
@@ -98,7 +98,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.value, str)
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
-    def test_extract_tone(self):
+    def test_extract_tone(self) -> None:
         """Test tone extraction."""
         content = "请用友好的语气回答"
         context = self.analyzer._extract_tone(content)
@@ -109,7 +109,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.value, str)
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
-    def test_extract_constraints(self):
+    def test_extract_constraints(self) -> None:
         """Test constraint extraction."""
         content = "必须使用中文回答，不能超过100字"
         contexts = self.analyzer._extract_constraints(content)
@@ -121,7 +121,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.value, str)
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
-    def test_extract_examples(self):
+    def test_extract_examples(self) -> None:
         """Test example extraction."""
         content = "例如：输入'你好'，输出'Hello'"
         contexts = self.analyzer._extract_examples(content)
@@ -134,7 +134,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
     
-    def test_determine_complexity(self):
+    def test_determine_complexity(self) -> None:
         """Test complexity determination."""
         # Test simple complexity
         content = "简单的问题"
@@ -151,7 +151,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         complexity = self.analyzer._determine_complexity(content, [])
         self.assertEqual(complexity, PromptComplexity.MEDIUM)
     
-    def test_calculate_confidence_score(self):
+    def test_calculate_confidence_score(self) -> None:
         """Test confidence score calculation."""
         # Test with empty contexts
         score = self.analyzer._calculate_confidence_score([])
@@ -172,7 +172,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
     
-    def test_generate_suggestions(self):
+    def test_generate_suggestions(self) -> None:
         """Test suggestions generation."""
         contexts = [
             ExtractedContext(
@@ -190,7 +190,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         self.assertGreater(len(suggestions), 0)
         self.assertIn("添加更多技术术语", suggestions)
     
-    def test_get_context_value(self):
+    def test_get_context_value(self) -> None:
         """Test context value retrieval."""
         contexts = [
             ExtractedContext(
@@ -218,7 +218,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         )
         self.assertEqual(value, "默认")
     
-    def test_domain_patterns_initialization(self):
+    def test_domain_patterns_initialization(self) -> None:
         """Test domain patterns initialization."""
         patterns = self.analyzer._domain_patterns
         
@@ -230,7 +230,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(keyword_list, list)
             self.assertGreater(len(keyword_list), 0)
     
-    def test_role_patterns_initialization(self):
+    def test_role_patterns_initialization(self) -> None:
         """Test role patterns initialization."""
         patterns = self.analyzer._role_patterns
         
@@ -242,7 +242,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(keyword_list, list)
             self.assertGreater(len(keyword_list), 0)
     
-    def test_audience_patterns_initialization(self):
+    def test_audience_patterns_initialization(self) -> None:
         """Test audience patterns initialization."""
         patterns = self.analyzer._audience_patterns
         
@@ -254,7 +254,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(keyword_list, list)
             self.assertGreater(len(keyword_list), 0)
     
-    def test_tone_patterns_initialization(self):
+    def test_tone_patterns_initialization(self) -> None:
         """Test tone patterns initialization."""
         patterns = self.analyzer._tone_patterns
         
@@ -266,7 +266,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(keyword_list, list)
             self.assertGreater(len(keyword_list), 0)
     
-    def test_complexity_indicators_initialization(self):
+    def test_complexity_indicators_initialization(self) -> None:
         """Test complexity indicators initialization."""
         indicators = self.analyzer._complexity_indicators
         
@@ -278,7 +278,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(indicator_list, list)
             self.assertGreater(len(indicator_list), 0)
     
-    def test_constraint_patterns_initialization(self):
+    def test_constraint_patterns_initialization(self) -> None:
         """Test constraint patterns initialization."""
         patterns = self.analyzer._constraint_patterns
         
@@ -288,7 +288,7 @@ class TestScenarioAnalyzer(unittest.TestCase):
         for pattern in patterns:
             self.assertIsInstance(pattern, str)
     
-    def test_example_patterns_initialization(self):
+    def test_example_patterns_initialization(self) -> None:
         """Test example patterns initialization."""
         patterns = self.analyzer._example_patterns
         
