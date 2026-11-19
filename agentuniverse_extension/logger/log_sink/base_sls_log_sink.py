@@ -16,18 +16,39 @@ from loguru import logger
 
 
 class BaseSLSLogSink(LogSink):
+    """Loguru sink that ships records to Alibaba Cloud SLS.
 
+    Subclasses implement :meth:`process_record` to serialize a single record.
+    """
 
     def process_record(self, record):
+        """Process a single log record.
+
+        Args:
+            record: The loguru log record to process.
+        """
         raise NotImplementedError("Subclasses must implement process_record.")
 
     def filter(self, record):
+        """Keep and process only records matching this sink's log type.
+
+        Args:
+            record: The loguru log record being filtered.
+
+        Returns:
+            bool: True when the record belongs to this sink's log type.
+        """
         if not record['extra'].get('log_type') == self.log_type:
             return False
         self.process_record(record)
         return True
 
     def register_sink(self):
+        """Register this sink with the loguru logger when SLS logging is enabled.
+
+        Uses the async SLS sender inside a coroutine context and the sync
+        sender otherwise; the loguru sink is added only once (sink_id == -1).
+        """
         if LoggingConfig.log_extend_module_switch["sls_log"]:
             print(
                 f"biz_logger_is_in_coroutine_context={is_in_coroutine_context()}")
