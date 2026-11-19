@@ -75,6 +75,7 @@ class LangChainInstance(LangChainLLM):
     @staticmethod
     def parse_stream_result(stream_result: Iterator[LLMOutput],
                             run_manager: Optional[CallbackManagerForLLMRun] = None) -> str:
+        """Aggregate streamed LLMOutput lines into a single text, notifying run_manager for every token. Args: stream_result (Iterator[LLMOutput]): The LLM output stream. run_manager: Optional callback manager. Returns: str: The concatenated text."""
         all_data = ""
         for line in stream_result:
             all_data += line.text
@@ -85,6 +86,7 @@ class LangChainInstance(LangChainLLM):
     @staticmethod
     async def aparse_stream_result(stream_result: AsyncIterator[LLMOutput],
                                    run_manager: Optional[AsyncCallbackManagerForLLMRun] = None) -> str:
+        """Asynchronously aggregate streamed LLMOutput lines into a single text, notifying run_manager for every token. Args: stream_result (AsyncIterator[LLMOutput]): The LLM output stream. run_manager: Optional async callback manager. Returns: str: The concatenated text."""
         all_data = ""
         async for line in stream_result:
             all_data += line.text
@@ -94,10 +96,13 @@ class LangChainInstance(LangChainLLM):
 
     @property
     def _llm_type(self) -> str:
+        """Return the identifier of the wrapped LLM type. Returns: str: The LLM type name."""
         return self.llm_type
 
     def get_num_tokens(self, text: str) -> int:
+        """Count the tokens of text using the wrapped LLM. Args: text (str): The input text. Returns: int: The number of tokens."""
         return self.llm.get_num_tokens(text)
 
     def get_token_ids(self, text: str) -> List[int]:
+        """Return the token ids of text using the wrapped LLM. Args: text (str): The input text. Returns: List[int]: The token ids."""
         return self.llm.get_token_ids(text)
