@@ -14,8 +14,10 @@ from agentuniverse.base.agentuniverse import AgentUniverse
 
 
 class ReActAgentTest(unittest.TestCase):
+    """Test cases for the demo react agent."""
 
     def setUp(self) -> None:
+        """Start the agent universe with the app configuration before each test."""
         AgentUniverse().start(config_path='../../config/config.toml')
 
     def test_react_agent(self):
