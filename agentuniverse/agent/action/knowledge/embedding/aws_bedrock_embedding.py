@@ -5,7 +5,10 @@
 # @Author  : kaichuan
 # @FileName: aws_bedrock_embedding.py
 
+import asyncio
 import json
+from contextlib import closing
+from threading import Lock
 from typing import Any, Optional, List
 
 from pydantic import Field
@@ -13,6 +16,8 @@ from pydantic import Field
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+
+_CLIENT_CREATION_LOCK = Lock()
 
 
 class AWSBedrockEmbedding(Embedding):
@@ -101,7 +106,8 @@ class AWSBedrockEmbedding(Embedding):
                 )
 
                 # Parse response
-                response_body = json.loads(response['body'].read())
+                with closing(response['body']) as response_stream:
+                    response_body = json.loads(response_stream.read())
 
                 # Extract embedding based on model type
                 if "titan" in model_id.lower():
@@ -124,8 +130,8 @@ class AWSBedrockEmbedding(Embedding):
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings from AWS Bedrock.
 
-        Note: Currently delegates to synchronous implementation.
-        Future versions may use aioboto3 for true async support.
+        The synchronous batch runs in a worker thread. Cancelling the awaiting
+        task does not interrupt an already running SDK request or batch.
 
         Args:
             texts (List[str]): A list of texts to be embedded.
@@ -138,9 +144,7 @@ class AWSBedrockEmbedding(Embedding):
             ValueError: If required configuration is missing or model is not supported.
             Exception: If the API call fails.
         """
-        # For now, delegate to sync implementation
-        # Future: Use aioboto3 for true async support
-        return self.get_embeddings(texts, **kwargs)
+        return await asyncio.to_thread(self.get_embeddings, texts, **kwargs)
 
     def as_langchain(self) -> Any:
         """Convert to LangChain-compatible BedrockEmbeddings instance.
@@ -223,15 +227,18 @@ class AWSBedrockEmbedding(Embedding):
         if self.aws_region:
             session_kwargs['region_name'] = self.aws_region
 
-        session = boto3.Session(**session_kwargs)
+        with _CLIENT_CREATION_LOCK:
+            if self.client is not None:
+                return
+            session = boto3.Session(**session_kwargs)
 
-        # Create Bedrock Runtime client with retry configuration
-        self.client = session.client(
-            service_name='bedrock-runtime',
-            config=Config(
-                retries={
-                    'max_attempts': 3,
-                    'mode': 'adaptive'
-                }
+            # Create Bedrock Runtime client with retry configuration
+            self.client = session.client(
+                service_name='bedrock-runtime',
+                config=Config(
+                    retries={
+                        'max_attempts': 3,
+                        'mode': 'adaptive'
+                    }
+                )
             )
-        )
