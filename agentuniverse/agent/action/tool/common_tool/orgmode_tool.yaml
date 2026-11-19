@@ -1,0 +1,36 @@
+name: orgmode_tool
+description: Org-mode tool — pure Python stdlib parsing of Emacs org-mode notes, no network required. mode='parse' turns org text into a flattened outline tree (per-heading level (capped at 10), title text, todo_state from TODO/DONE or custom #+TODO: workflows, trailing :tag: lists, [#A]/[#B]/[#C] priority, subtree line spans, skipped :PROPERTIES: drawers with spans noted) plus #+TITLE/#+AUTHOR/#+FILETAGS meta; #+BEGIN_SRC content is immune to heading detection. mode='todo_summary' returns per-state counts, the done ratio and the first-TODO-per-top-level-subtree next-action list. mode='strip' returns the text without drawers and #+ lines (optionally body-only, dropping headings too).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.orgmode_tool
+  class: OrgModeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Org-mode mode — parse (flatten the outline), todo_summary (agenda-style statistics) or strip (clean text without drawers / #+ lines).
+    required: true
+  text:
+    type: string
+    description: The org-mode document text. Required for every mode; CRLF line endings are normalized to LF.
+    required: false
+  body_only:
+    type: boolean
+    description: Strip mode only — when true the heading lines are dropped as well, leaving plain body text. Defaults to false; not used by the other modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "todo_summary", "strip"]
+      description: Org-mode operation.
+    text:
+      type: string
+      description: The org-mode document text.
+    body_only:
+      type: boolean
+      description: Drop heading lines too (strip mode only).
+  required: ["mode"]
