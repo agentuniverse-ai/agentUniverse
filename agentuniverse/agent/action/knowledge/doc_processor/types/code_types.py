@@ -13,6 +13,10 @@ from agentuniverse.agent.action.knowledge.doc_processor.types.metrics_types impo
 
 
 class CodeFeatures(TypedDict):
+    """TypedDict describing per-node code metrics and feature counts of a parsed code file.
+
+    Keys: node_counts, code_metrics, identifier_count, function_count, class_count, statement_count.
+    """
     node_counts: Dict[str, int]
     code_metrics: CodeMetrics
     identifier_count: int
@@ -22,6 +26,10 @@ class CodeFeatures(TypedDict):
 
 
 class CodeRepresentation(TypedDict):
+    """TypedDict describing the full representation of a parsed code file.
+
+    Keys: ast, features, language, code_length.
+    """
     ast: AstNode
     features: CodeFeatures
     language: str
@@ -29,6 +37,10 @@ class CodeRepresentation(TypedDict):
 
 
 class ChunkRepresentation(TypedDict):
+    """TypedDict describing one chunk of code extracted from a file.
+
+    Keys: ast, code, language, name, type.
+    """
     ast: AstNode
     code: str
     language: str
