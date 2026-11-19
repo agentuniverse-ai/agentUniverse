@@ -1,0 +1,38 @@
+name: 'multi_query_paraphraser'
+description: 'Multi-query expansion: one LLM call generates several question reformulations of the original query so dense retrieval covers more phrasings of the same intent. Best-effort by contract — degrades to pass-through when no llm_model is configured or generation fails.'
+
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.multi_query_paraphraser'
+  class: 'MultiQueryParaphraser'
+
+# --- LLM component ---
+# Name of a registered LLM component used to generate the variants,
+# e.g. 'default_openai_llm'. Empty (default) keeps the shipped definition
+# loadable without credentials: queries pass through unchanged with a
+# warning until an llm_model is configured.
+llm_model: ''
+
+# --- Generation bounds ---
+# Maximum number of variants to keep (the LLM is asked for exactly this
+# many in a single call); range [1, 10].
+num_queries: 3
+# Hard truncation applied to every generated variant.
+max_query_chars: 512
+
+# --- Query rewriting ---
+# append: original query followed by the variants (default).
+# replace: variants only.
+mode: 'append'
+
+# --- Prompt ---
+# Custom user-prompt template; must contain the literal {query} placeholder
+# and may contain {num} (replaced first, so other braces are safe).
+# Defaults to a built-in instruction answering in the language of the query.
+# prompt_template: 'Rewrite {num} ways: {query}'
+
+# --- Provenance (ext_info keys) ---
+# The untouched original query string is recorded under origin_query_key
+# (first expansion wins) and the final variants under variants_key.
+origin_query_key: 'multi_query_origin_query_str'
+variants_key: 'multi_query_variants'
