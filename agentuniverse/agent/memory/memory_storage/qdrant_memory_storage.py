@@ -199,7 +199,9 @@ class QdrantMemoryStorage(MemoryStorage):
                     with_vectors=False,
                     query_filter=filt,
                 )
-                messages = self.to_messages(results)
+                # query_points 返回 QueryResponse（pydantic 对象），迭代产出
+                # (field_name, value) 元组而非 ScoredPoint——必须取 .points。
+                messages = self.to_messages(results.points)
                 messages.reverse()
                 return messages
             else:
