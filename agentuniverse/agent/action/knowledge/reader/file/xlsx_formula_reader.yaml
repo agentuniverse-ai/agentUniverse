@@ -1,0 +1,9 @@
+name: xlsx_formula_reader
+description: Read formulas and unverified stored results side by side.
+max_file_bytes: 16777216
+max_uncompressed_bytes: 134217728
+max_cells: 100000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.xlsx_formula_reader
+  class: XlsxFormulaReader
