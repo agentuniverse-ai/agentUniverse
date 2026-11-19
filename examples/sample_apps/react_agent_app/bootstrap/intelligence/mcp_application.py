@@ -16,6 +16,8 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the application server.
+        """
         AgentUniverse().start()
         MCPServerManager().start_server(core_mode=True)
 
