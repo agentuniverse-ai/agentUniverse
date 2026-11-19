@@ -29,6 +29,7 @@ class AuTraceManager:
 
     @property
     def trace_context(self) -> AuTraceContext:
+        """Return the current AuTraceContext, creating and storing a new one when none is active yet. Returns: AuTraceContext: The active trace context."""
         context = self.context_instance.get(None)
         if not context:
             context = self.context_class.new_context()
@@ -36,6 +37,7 @@ class AuTraceManager:
         return context
 
     def get_trace_dict(self) -> dict:
+        """Return the non-empty trace ids of the current trace context as a dict. Returns: dict: Mapping of session_id/trace_id/span_id to their values."""
         trace_dict = {}
         if self.trace_context.session_id:
             trace_dict["session_id"] = self.trace_context.session_id
@@ -46,21 +48,27 @@ class AuTraceManager:
         return trace_dict
 
     def set_session_id(self, session_id):
+        """Set the session id on the current trace context. Args: session_id (str): The session id to set."""
         self.trace_context.set_session_id(session_id)
 
     def get_session_id(self):
+        """Return the session id of the current trace context. Returns: str | None: The session id."""
         return self.trace_context.session_id
 
     def set_trace_id(self, trace_id):
+        """Set the trace id on the current trace context. Args: trace_id (str): The trace id to set."""
         self.trace_context.set_trace_id(trace_id)
 
     def get_trace_id(self):
+        """Return the trace id of the current trace context. Returns: str | None: The trace id."""
         return self.trace_context.trace_id
 
     def set_span_id(self, span_id):
+        """Set the span id on the current trace context. Args: span_id (str): The span id to set."""
         self.trace_context.set_span_id(span_id)
 
     def get_span_id(self):
+        """Return the span id of the current trace context. Returns: str | None: The span id."""
         return self.trace_context.span_id
 
 
