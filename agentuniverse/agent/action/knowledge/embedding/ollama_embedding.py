@@ -21,7 +21,7 @@ class OllamaEmbedding(Embedding):
 
     ollama_base_url: Optional[str] = Field(
         default_factory=lambda: get_from_env("OLLAMA_BASE_URL") or "http://localhost:11434")
-    
+
     ollama_api_key: Optional[str] = Field(
         default_factory=lambda: get_from_env("OLLAMA_API_KEY"))
 
@@ -43,7 +43,7 @@ class OllamaEmbedding(Embedding):
             Exception: If the API call fails or if required configuration is missing.
         """
         self._initialize_clients()
-        
+
         try:
             embeddings = []
             for text in texts:
@@ -58,7 +58,7 @@ class OllamaEmbedding(Embedding):
                 response.raise_for_status()
                 result = response.json()
                 embeddings.append(result["embedding"])
-            
+
             return embeddings
 
         except Exception as e:
@@ -117,7 +117,7 @@ class OllamaEmbedding(Embedding):
         Initialize the embedding by the ComponentConfiger object.
         Args:
             embedding_configer(ComponentConfiger): A configer contains embedding configuration.
-        Returns:    
+        Returns:
             Embedding: A OllamaEmbedding instance.
         """
         super()._initialize_by_component_configer(embedding_configer)
