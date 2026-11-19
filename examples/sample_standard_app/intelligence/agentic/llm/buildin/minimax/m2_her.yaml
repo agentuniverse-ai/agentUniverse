@@ -1,0 +1,9 @@
+name: 'm2-her'
+description: 'm2-her'
+model_name: 'M2-her'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 64000
+channel: m2-her-official-cn
+meta_class: 'agentuniverse.llm.default.minimax_openai_style_llm.MiniMaxOpenAIStyleLLM'

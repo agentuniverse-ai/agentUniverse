@@ -32,4 +32,10 @@ LLM_MODEL_NAME = {
     'baichuan_llm': ['Baichuan4', 'Baichuan3-Turbo', 'Baichuan3-Turbo-128k', 'Baichuan2-Turbo', 'Baichuan2-Turbo-192k'],
     'default_baichuan_llm': ['Baichuan4', 'Baichuan3-Turbo', 'Baichuan3-Turbo-128k', 'Baichuan2-Turbo',
                              'Baichuan2-Turbo-192k'],
+    'minimax_llm': ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed',
+                    'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.1',
+                    'MiniMax-M2.1-highspeed', 'MiniMax-M2', 'M2-her'],
+    'default_minimax_llm': ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed',
+                            'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.1',
+                            'MiniMax-M2.1-highspeed', 'MiniMax-M2', 'M2-her'],
 }
