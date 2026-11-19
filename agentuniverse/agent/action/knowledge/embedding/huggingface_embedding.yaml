@@ -1,0 +1,8 @@
+name: 'huggingface_embedding'
+description: 'embedding use huggingface_hub inference api, support hf inference api / inference endpoints / tei'
+embedding_model_name: 'sentence-transformers/all-MiniLM-L6-v2'
+
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.huggingface_embedding'
+  class: 'HuggingFaceEmbedding'
