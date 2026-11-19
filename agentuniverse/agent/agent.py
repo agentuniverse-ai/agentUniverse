@@ -430,7 +430,9 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(tool_results)
 
     def invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
-        knowledge_names = kwargs.get('knowledge_names') or self.agent_model.action.get('knowledge', [])
+        knowledge_names = kwargs.get('knowledge_names')
+        if knowledge_names is None:
+            knowledge_names = self.agent_model.action.get('knowledge', [])
         if not knowledge_names or not query_str:
             return ''
 
