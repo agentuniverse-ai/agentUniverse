@@ -30,6 +30,11 @@ class Workflow(ComponentBase):
         arbitrary_types_allowed = True
 
     def __init__(self, **kwargs):
+        """Initialize the workflow with its component type set to workflow.
+
+        Args:
+            **kwargs: Field values for the workflow (id, name, description, graph, graph_config).
+        """
         super().__init__(component_type=ComponentEnum.WORKFLOW, **kwargs)
 
     def get_instance_code(self) -> str:
@@ -42,6 +47,14 @@ class Workflow(ComponentBase):
         return self.id or self.name or "<unnamed>"
 
     def build(self) -> 'Workflow':
+        """Build the workflow graph from graph_config.
+
+        Returns:
+            Workflow: This workflow instance.
+
+        Raises:
+            ValueError: If graph_config is None.
+        """
         if self.graph_config is None:
             message = (
                 f"Workflow '{self._identity()}' cannot be built because "
@@ -53,6 +66,17 @@ class Workflow(ComponentBase):
         return self
 
     def run(self, input_params: dict) -> WorkflowOutput:
+        """Run the workflow graph over the given input parameters.
+
+        Args:
+            input_params(dict): The workflow input parameters.
+
+        Returns:
+            WorkflowOutput: The workflow execution output.
+
+        Raises:
+            ValueError: If the workflow graph is not built yet.
+        """
         if self.graph is None:
             message = (
                 f"Workflow '{self._identity()}' has not been built. "
