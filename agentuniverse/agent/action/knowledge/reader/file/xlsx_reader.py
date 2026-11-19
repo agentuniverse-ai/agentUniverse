@@ -37,7 +37,7 @@ class XlsxReader(Reader):
             raise ImportError(
                 "openpyxl is required to read Excel files: "
                 "`pip install openpyxl`"
-            )
+            ) from None
 
         if isinstance(file, str):
             file = Path(file)
