@@ -1,0 +1,26 @@
+name: 'duplicate_sentence_filter'
+description: 'remove repeated sentences within each document (exact or near-duplicate mode)'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_sentence_filter'
+  class: 'DuplicateSentenceFilter'
+
+# Deduplication mode: 'exact' (default) drops later sentences whose
+# normalized key — casefolded, whitespace-collapsed, trailing punctuation
+# stripped — equals an earlier kept one; 'near' additionally treats
+# token-set Jaccard similarity >= jaccard_threshold as a duplicate.
+mode: 'exact'
+
+# Minimum token-set Jaccard similarity for two sentences to count as
+# near-duplicates, compared with >=, in (0, 1]. Only used in 'near' mode.
+# Candidates are compared only within a sliding length-class bucket
+# (distinct-token counts differing by at most 2), keeping the scan linear;
+# at the default 0.9 threshold true duplicates within that window are
+# never missed.
+jaccard_threshold: 0.9
+
+# When false (default) the FIRST occurrence of a repeated sentence is kept
+# and later ones dropped; when true the LAST occurrence is kept instead
+# (most recent wording) and the earlier ones dropped.
+keep_last: false
