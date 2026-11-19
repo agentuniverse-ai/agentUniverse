@@ -32,13 +32,13 @@ from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_he
 class TestPromptGenerator(unittest.TestCase):
     """Test cases for prompt generator functionality."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.test_task = "Customer service assistant for e-commerce platform"
         self.test_scenario = "online shopping support"
         self.valid_agent_types = ["react", "rag", "planning", "executing"]
 
-    def test_generate_basic_prompt(self):
+    def test_generate_basic_prompt(self) -> None:
         """Test basic prompt generation functionality."""
         for agent_type in self.valid_agent_types:
             with self.subTest(agent_type=agent_type):
@@ -64,7 +64,7 @@ class TestPromptGenerator(unittest.TestCase):
                 self.assertTrue(result['target'].strip())
                 self.assertTrue(result['instruction'].strip())
 
-    def test_generate_prompt_with_file_output(self):
+    def test_generate_prompt_with_file_output(self) -> None:
         """Test prompt generation with file output."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
             output_path = f.name
@@ -91,7 +91,7 @@ class TestPromptGenerator(unittest.TestCase):
             if os.path.exists(output_path):
                 os.unlink(output_path)
 
-    def test_unsupported_agent_type(self):
+    def test_unsupported_agent_type(self) -> None:
         """Test error handling for unsupported agent types."""
         with self.assertRaises(UnsupportedAgentTypeError):
             generate_prompt_config(
@@ -100,7 +100,7 @@ class TestPromptGenerator(unittest.TestCase):
                 scenario=self.test_scenario
             )
 
-    def test_empty_task_description(self):
+    def test_empty_task_description(self) -> None:
         """Test handling of empty task description."""
         with self.assertRaises(ValueError):
             generate_prompt_config(
@@ -109,7 +109,7 @@ class TestPromptGenerator(unittest.TestCase):
                 scenario=self.test_scenario
             )
 
-    def test_optimize_existing_prompt(self):
+    def test_optimize_existing_prompt(self) -> None:
         """Test prompt optimization functionality."""
         existing_prompt = """
         You are a helpful assistant.
@@ -134,7 +134,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn('target', optimized)
         self.assertIn('instruction', optimized)
 
-    def test_template_helper_agent_types(self):
+    def test_template_helper_agent_types(self) -> None:
         """Test PromptTemplateHelper agent types."""
         agent_templates = PromptTemplateHelper.AGENT_TEMPLATES
 
@@ -150,7 +150,7 @@ class TestPromptGenerator(unittest.TestCase):
                 self.assertIn('target_template', template)
                 self.assertIn('instruction_template', template)
 
-    def test_prompt_generation_with_scenario(self):
+    def test_prompt_generation_with_scenario(self) -> None:
         """Test prompt generation incorporates scenario correctly."""
         scenario = "financial services"
 
@@ -172,7 +172,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertTrue(scenario_incorporated,
                        f"Scenario '{scenario}' not incorporated in generated content")
 
-    def test_prompt_generation_without_scenario(self):
+    def test_prompt_generation_without_scenario(self) -> None:
         """Test prompt generation works without scenario."""
         result = generate_prompt_config(
             task_description=self.test_task,
@@ -187,7 +187,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn('instruction', result)
         self.assertTrue(result['introduction'].strip())
 
-    def test_multiple_agent_types_consistency(self):
+    def test_multiple_agent_types_consistency(self) -> None:
         """Test that different agent types produce consistent structure."""
         results = {}
 
@@ -205,7 +205,7 @@ class TestPromptGenerator(unittest.TestCase):
             self.assertEqual(set(results[agent_type].keys()), first_keys,
                            f"Agent type {agent_type} has different structure")
 
-    def test_error_handling_invalid_optimization_goal(self):
+    def test_error_handling_invalid_optimization_goal(self) -> None:
         """Test optimization with invalid goal."""
         existing_prompt = "You are a helpful assistant."
 
@@ -221,7 +221,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn('analysis', result)
 
 
-def run_tests():
+def run_tests() -> None:
     """Run all test cases."""
     unittest.main(verbosity=2)
 
