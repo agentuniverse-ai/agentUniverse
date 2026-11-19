@@ -13,6 +13,7 @@ from ollama import Options
 
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.llm.default.default_ollama_llm import _extract_ollama_message
 from agentuniverse.llm.llm_channel.langchain_instance.ollama_channel_langchain_instance import \
     OllamaChannelLangchainInstance
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
@@ -63,8 +64,9 @@ class OllamaLLMChannel(LLMChannel):
         if should_stream:
             return self.generate_result(res)
         else:
-            return LLMOutput(text=res.get("message").get('content'), raw=json.dumps(res),
-                             message=Message.from_dict(res.get("message")))
+            message = _extract_ollama_message(res)
+            return LLMOutput(text=message.get('content', ''), raw=json.dumps(res),
+                             message=Message.from_dict(message))
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         client = self._new_async_client()
@@ -73,17 +75,20 @@ class OllamaLLMChannel(LLMChannel):
         options.setdefault("stop", stop)
         res = await client.chat(model=self.channel_model_name, messages=messages, options=options, stream=should_stream)
         if not should_stream:
-            return LLMOutput(text=res.get("message").get('content'), raw=json.dumps(res),
-                             message=Message.from_dict(res.get("message")))
+            message = _extract_ollama_message(res)
+            return LLMOutput(text=message.get('content', ''), raw=json.dumps(res),
+                             message=Message.from_dict(message))
         if should_stream:
             return self.agenerate_result(res)
 
     def generate_result(self, data):
         for line in data:
-            yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line),
-                            message=Message.from_dict(line.get("message")))
+            message = _extract_ollama_message(line)
+            yield LLMOutput(text=message.get('content', ''), raw=json.dumps(line),
+                            message=Message.from_dict(message))
 
     async def agenerate_result(self, data):
         async for line in data:
-            yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line),
-                            message=Message.from_dict(line.get("message")))
+            message = _extract_ollama_message(line)
+            yield LLMOutput(text=message.get('content', ''), raw=json.dumps(line),
+                            message=Message.from_dict(message))
