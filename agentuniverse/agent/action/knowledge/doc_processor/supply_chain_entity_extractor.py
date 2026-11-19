@@ -314,29 +314,29 @@ Return results in JSON format:
         case_sensitive_patterns = {
             'supplier': [
                 # Company name patterns - capture full name INCLUDING suffix
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Supplier)\b',  # "ABC Supplier"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Components|Materials))\b',  # "ABC Components", "DEF Materials"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+Supplier)\b',  # "ABC Supplier"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Components|Materials))\b',  # "ABC Components", "DEF Materials"
                 r'\b([A-Z][A-Za-z]+公司)\b',  # "ABC公司"
             ],
             'manufacturer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Manufacturing|Factory))\b',  # "XYZ Manufacturing"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Manufacturer)\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Manufacturing|Factory))\b',  # "XYZ Manufacturing"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+Manufacturer)\b',
             ],
             'distributor': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Distributor|Distribution))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Distributor|Distribution))\b',
             ],
             'warehouse': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Warehouse|Storage))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Warehouse|Storage))\b',
                 r'\b([A-Z][A-Za-z\u4e00-\u9fa5]{2,15}\s*仓库)\b',
             ],
             'retailer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Store|Retail|Shop|Market))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Store|Retail|Shop|Market))\b',
             ],
             'logistics_provider': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Logistics|Shipping|Transport|Freight))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Logistics|Shipping|Transport|Freight))\b',
             ],
             'customer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Inc\.|Ltd\.|Corp\.|Co\.))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Inc\.|Ltd\.|Corp\.|Co\.))\b',
             ],
         }
 
