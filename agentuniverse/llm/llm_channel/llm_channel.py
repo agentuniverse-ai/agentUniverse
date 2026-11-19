@@ -93,7 +93,7 @@ class LLMChannel(ComponentBase):
         return self._channel_model_config
 
     @channel_model_config.setter
-    def channel_model_config(self, config: dict):
+    def channel_model_config(self, config: dict) -> None:
         self._channel_model_config = config
         if config:
             for key, value in config.items():
