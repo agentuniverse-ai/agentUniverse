@@ -26,6 +26,14 @@ class TokenTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Lazily create and return the underlying token-based splitter.
+
+        The splitter is built once from the configured encoding, model, chunk
+        size and chunk overlap, then cached for subsequent accesses.
+
+        Returns:
+            Splitter: The configured LangChain TokenTextSplitter instance.
+        """
         if not self.__splitter:
             self.__splitter = Splitter(
             encoding_name=self.encoding_name,
