@@ -163,6 +163,9 @@ class RamContextStore(ContextStore):
         if session_id not in self._storage:
             return []
 
+        if not query or not query.strip():
+            return []
+
         session_storage = self._storage[session_id]
         segments = list(session_storage.values())
 
