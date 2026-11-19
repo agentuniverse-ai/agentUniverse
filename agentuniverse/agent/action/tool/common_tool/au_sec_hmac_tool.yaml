@@ -1,0 +1,24 @@
+name: au_sec_hmac_tool
+description: Sign, verify, compare, and introspect with bounded, constant-time, deterministic HMAC-SHA256.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.au_sec_hmac_tool
+  class: AuSecHmacTool
+input_keys:
+  - action
+  - key
+  - message
+  - signature
+  - other
+max_key_bytes: 4096
+max_message_bytes: 1048576
+max_signature_bytes: 4096
+args_model_schema:
+  type: object
+  properties:
+    action: {type: string, enum: [sign, verify, compare, info]}
+    key: {type: string}
+    message: {type: string}
+    signature: {type: string}
+    other: {type: string}
