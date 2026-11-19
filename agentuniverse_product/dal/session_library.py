@@ -12,6 +12,7 @@ from sqlalchemy.orm import declarative_base
 
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
+from agentuniverse_product.dal.message_library import MessageORM
 from agentuniverse_product.dal.model.session_do import SessionDO
 from agentuniverse.base.util.logging.logging_util import LOGGER
 
@@ -76,6 +77,8 @@ class SessionLibrary:
             session_orm = db_session.query(SessionORM).filter(
                 SessionORM.session_id == session_id).one_or_none()
             if session_orm:
+                db_session.query(MessageORM).filter(
+                    MessageORM.session_id == session_id).delete(synchronize_session=False)
                 db_session.delete(session_orm)
                 db_session.commit()
                 return session_orm.session_id
