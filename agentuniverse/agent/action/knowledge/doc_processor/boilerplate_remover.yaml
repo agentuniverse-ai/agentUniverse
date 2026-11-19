@@ -1,0 +1,30 @@
+name: 'boilerplate_remover'
+description: 'strip headers, footers and other lines repeated across a document batch before splitting/embedding'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.boilerplate_remover'
+  class: 'BoilerplateRemover'
+
+# Fraction of the batch's documents a (whitespace-normalized) line must
+# appear in to count as boilerplate, in (0, 1]; the boundary is inclusive
+# (3 of 5 documents satisfies 0.6). Counted once per document, so a header
+# printed twice within one document does not inflate its own count.
+threshold: 0.6
+
+# Alternative absolute rule: a line present in at least this many
+# documents is boilerplate regardless of `threshold`. Omit (null) to
+# disable; when set it must be >= 2 — a single-document match is never
+# cross-document evidence.
+min_docs: null
+
+# 'remove-lines' (default) drops boilerplate lines from the text;
+# 'tag-only' leaves the text untouched and lists the detected lines in
+# metadata['boilerplate_lines'] for auditing.
+mode: 'remove-lines'
+
+# Lines whose normalized form is shorter than this are safe-listed: they
+# are only removed when they appear in every document of the batch,
+# protecting short structural lines such as '---' or '*'. 0 disables the
+# safe-list. Must be >= 0.
+min_line_len: 4
