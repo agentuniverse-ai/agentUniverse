@@ -12,6 +12,11 @@ from langchain_core.utils.json import parse_json_markdown
 
 
 class ChooseProductInfoAgent(AgentTemplate):
+    """Agent that chooses matching product information for a user question.
+
+    Takes the user question as input and returns the selected list of
+    candidate products parsed from the agent result.
+    """
 
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
