@@ -11,6 +11,8 @@ from functools import lru_cache
 
 
 class LLMModelEnum(Enum):
+    """Enumeration of supported LLM model providers.
+    """
     QWEN = "qwen"
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
