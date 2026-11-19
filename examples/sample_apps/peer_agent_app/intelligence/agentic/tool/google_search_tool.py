@@ -24,10 +24,10 @@ class GoogleSearchTool(Tool):
 
     def execute(self, input: str):
         """Execute Google search and return top 10 results.
-        
+
         Args:
             input (str): The search query string
-            
+
         Returns:
             str: Search results from Google in text format
         """
