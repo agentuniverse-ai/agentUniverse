@@ -16,6 +16,7 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class ConditionNodeData(NodeData):
+    """Data model of the condition node holding its input configuration."""
     inputs: Optional[ConditionNodeInputParams] = None
 
 
@@ -24,16 +25,36 @@ class ConditionNode(Node):
     _data_cls = ConditionNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the condition node and mark it with the CONDITION type."""
         super().__init__(**kwargs)
         self.type = NodeEnum.CONDITION
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Evaluate the first condition branch and produce the routing result.
+
+        Args:
+            workflow_output: The workflow output used to resolve referenced
+                node values.
+
+        Returns:
+            A NodeOutput whose edge_source_handler is the branch name when the
+            condition holds, otherwise 'branch-default'.
+        """
         inputs: ConditionNodeInputParams = self._data.inputs
         condition_branches: List[ConditionBranchParams] = inputs.branches
         condition_branch: ConditionBranchParams = condition_branches[0]
         condition: ConditionParams = condition_branch.conditions[0]
 
         def resolve_value(node_input: NodeInputParams):
+            """Resolve the actual value of a condition node input.
+
+            Args:
+                node_input: The input parameter to resolve.
+
+            Returns:
+                The referenced node output value when the input type is
+                'reference', otherwise the literal content of the input.
+            """
             if node_input.value.type == 'reference':
                 reference_node_id = node_input.value.content[0]
                 reference_output_params: List[NodeOutputParams] = workflow_output.workflow_parameters.get(
