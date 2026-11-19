@@ -23,6 +23,13 @@ class DefaultLLMConfiger(Configer):
     default_llm: Optional[str] = None
 
     def __init__(self, config_path: str = None):
+        """Initialize the DefaultLLMConfiger.
+
+        Args:
+            config_path(str): the path of the TOML configuration file; when
+                given and readable, load it and set the default_llm attribute
+                from its DEFAULT section, otherwise loading is skipped.
+        """
         super().__init__(config_path)
         if config_path:
             try:
