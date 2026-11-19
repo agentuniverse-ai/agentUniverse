@@ -1,0 +1,220 @@
+name: plantuml_tool
+description: PlantUML diagram source generation tool — pure Python stdlib, no rendering and no plantuml jar/CLI dependency. Builds UML class diagram source from classes/relations/notes specs (mode='class_diagram') with interface/abstract/enum stereotypes, visibility-modified fields/methods and the six UML relation arrows (extends, implements, composition, aggregation, association, dependency), sequence diagram source from participants/messages/notes/frames specs (mode='sequence') with autonumber, activation lines and alt/loop/par/opt frames, and runs a basic sanity lint (@startuml/@enduml balance, participant-before-use, frame containment, multi-line note containment) over a PlantUML source string (mode='validate').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.plantuml_tool
+  class: PlantumlTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Diagram mode — class_diagram, sequence or validate.
+    required: true
+  classes:
+    type: array
+    description: Class diagram classes, each {name, stereotype?, fields?, methods?, color?} with stereotype one of interface / abstract / enum (default plain class), fields {visibility?, name, type?}, methods {visibility?, name, params?, return?} and visibility one of + (default), -, #, ~. Names are sanitized to [A-Za-z0-9_] deterministically and the mapping is reported. Required for the class_diagram mode.
+    required: false
+  relations:
+    type: array
+    description: Class diagram relations, each {from, to, kind?, label?} with kind one of extends (<|--), implements (<|..), composition (*--), aggregation (o--), association (-- default), dependency (..>); from/to must reference declared class names. 'from' renders left of the arrow and carries the triangle / diamond (the parent, interface or whole end for extends / implements / composition / aggregation); for dependency the ..> arrowhead lands on 'to' (from is the dependent end). Optional for the class_diagram mode.
+    required: false
+  notes:
+    type: array
+    description: Class diagram notes, each {on, text} attaching a 'note right of' to the declared class 'on' (class_diagram mode). For the sequence mode each note is {over, text} where over is one participant name or a list of one or two participant names.
+    required: false
+  participants:
+    type: array
+    description: Sequence participants, each {name, as?, type?} with type one of actor / boundary / control / entity / database / participant (default). Names are sanitized like class names; the original spelling becomes the display alias when sanitization changed it and no explicit 'as' was given. Required for the sequence mode.
+    required: false
+  messages:
+    type: array
+    description: Sequence messages, each {from, to, text, kind?, activate?, deactivate_after?} with kind solid (-> default) or dashed (-->); from/to must reference declared participants. activate activates the receiver (to), deactivate_after deactivates the sender (from) right after the message (strict pairing enforced). Required for the sequence mode.
+    required: false
+  frames:
+    type: array
+    description: Optional sequence interaction frames, each {kind, label?, message_indexes} with kind one of alt / loop / par / opt and message_indexes a non-empty ascending contiguous run of 0-based message indexes; frames must not overlap and must be given in start order. Sequence mode only.
+    required: false
+  autonumber:
+    type: boolean
+    description: Turn on PlantUML autonumber message numbering. Default false. Sequence mode only.
+    required: false
+  source:
+    type: string
+    description: The PlantUML source string to lint (basic sanity pass — delimiter balance, participant-before-use, frame and multi-line note containment; not a full parser). Required for the validate mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["class_diagram", "sequence", "validate"]
+      description: Diagram mode.
+    classes:
+      type: array
+      description: Class specs ({name, stereotype?, fields?, methods?, color?}).
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Class name (sanitized to [A-Za-z0-9_]).
+          stereotype:
+            type: string
+            enum: ["interface", "abstract", "enum"]
+            description: Class stereotype (default plain class).
+          fields:
+            type: array
+            description: Fields ({visibility?, name, type?}).
+            items:
+              type: object
+              properties:
+                visibility:
+                  type: string
+                  enum: ["+", "-", "#", "~"]
+                  description: UML visibility modifier (default +).
+                name:
+                  type: string
+                  description: Field name (plain identifier).
+                type:
+                  type: string
+                  description: Optional field type.
+              required: ["name"]
+          methods:
+            type: array
+            description: Methods ({visibility?, name, params?, return?}).
+            items:
+              type: object
+              properties:
+                visibility:
+                  type: string
+                  enum: ["+", "-", "#", "~"]
+                  description: UML visibility modifier (default +).
+                name:
+                  type: string
+                  description: Method name (plain identifier).
+                params:
+                  type: array
+                  description: Parameters ({name, type?}).
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Parameter name (plain identifier).
+                      type:
+                        type: string
+                        description: Optional parameter type.
+                    required: ["name"]
+                return:
+                  type: string
+                  description: Optional return type.
+              required: ["name"]
+          color:
+            type: string
+            description: Class background color — color word (LightBlue) or 6-digit hex triplet (99CCFF) without the leading '#'.
+        required: ["name"]
+    relations:
+      type: array
+      description: Relation specs ({from, to, kind?, label?}). 'from' renders on the left of the arrow and carries the triangle / diamond, so it is the parent, interface or whole end for extends / implements / composition / aggregation; for dependency the ..> arrowhead lands on 'to' (from is the dependent end).
+      items:
+        type: object
+        properties:
+          from:
+            type: string
+            description: Left-endpoint class name carrying the triangle / diamond for extends / implements / composition / aggregation, or the dependent end for dependency (must be declared).
+          to:
+            type: string
+            description: Second endpoint class name (must be declared).
+          kind:
+            type: string
+            enum: ["extends", "implements", "composition", "aggregation", "association", "dependency"]
+            description: Relation kind (default association).
+          label:
+            type: string
+            description: Optional relation label.
+        required: ["from", "to"]
+    notes:
+      type: array
+      description: Note specs — {on, text} for class diagrams, {over, text} for sequence diagrams.
+      items:
+        type: object
+        properties:
+          on:
+            type: string
+            description: Class name the note attaches to (class_diagram mode).
+          over:
+            description: Participant name or list of one or two participant names the note spans (sequence mode).
+          text:
+            type: string
+            description: Note text.
+        required: ["text"]
+    participants:
+      type: array
+      description: Participant specs ({name, as?, type?}).
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Participant reference name (sanitized to [A-Za-z0-9_]).
+          as:
+            type: string
+            description: Optional display alias shown on the diagram.
+          type:
+            type: string
+            enum: ["participant", "actor", "boundary", "control", "entity", "database"]
+            description: Participant type (default participant).
+        required: ["name"]
+    messages:
+      type: array
+      description: Message specs ({from, to, text, kind?, activate?, deactivate_after?}).
+      items:
+        type: object
+        properties:
+          from:
+            type: string
+            description: Sender participant name (must be declared).
+          to:
+            type: string
+            description: Receiver participant name (must be declared).
+          text:
+            type: string
+            description: Message text.
+          kind:
+            type: string
+            enum: ["solid", "dashed"]
+            description: Line style (default solid ->).
+          activate:
+            type: boolean
+            description: Activate the receiver on this message.
+          deactivate_after:
+            type: boolean
+            description: Deactivate the sender (from) right after this message.
+        required: ["from", "to", "text"]
+    frames:
+      type: array
+      description: Interaction frame specs ({kind, label?, message_indexes}).
+      items:
+        type: object
+        properties:
+          kind:
+            type: string
+            enum: ["alt", "loop", "par", "opt"]
+            description: Frame kind.
+          label:
+            type: string
+            description: Optional frame label.
+          message_indexes:
+            type: array
+            description: Non-empty ascending contiguous run of 0-based message indexes wrapped by the frame.
+            items:
+              type: integer
+        required: ["kind", "message_indexes"]
+    autonumber:
+      type: boolean
+      description: Emit the PlantUML autonumber directive (default false).
+    source:
+      type: string
+      description: PlantUML source to lint (validate mode).
