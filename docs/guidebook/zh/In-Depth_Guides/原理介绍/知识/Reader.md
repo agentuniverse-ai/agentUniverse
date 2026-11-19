@@ -48,6 +48,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 ```
 
 ## agentUniverse目前内置有以下Reader:
+- [Notebook 证据读取](Notebook_Evidence_Reader.md)：可选本地单元格源码与明确选择的未验证缓存输出。
 - [default_docx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml)：读取本地Pdf文件中的文本内容
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml)：读取本地Pptx文件中的文本内容
