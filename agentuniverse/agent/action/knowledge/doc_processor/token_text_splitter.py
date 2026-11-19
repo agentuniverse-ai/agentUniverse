@@ -26,6 +26,7 @@ class TokenTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Return the lazily constructed token text splitter instance."""
         if not self.__splitter:
             self.__splitter = Splitter(
             encoding_name=self.encoding_name,
