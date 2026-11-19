@@ -1,0 +1,13 @@
+name: 'default_doubao_llm'
+description: 'default doubao llm powered by the ByteDance Doubao models on Volcengine Ark'
+model_name: 'doubao-pro-32k'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${ARK_API_KEY}'
+api_base: 'https://ark.cn-beijing.volces.com/api/v3'
+proxy: '${DOUBAO_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.doubao_llm'
+  class: 'DoubaoLLM'
