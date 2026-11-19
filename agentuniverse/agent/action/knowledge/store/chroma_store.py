@@ -179,6 +179,8 @@ class ChromaStore(Store):
 
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initialize this component from a component configer and return itself.
+        """
         super()._initialize_by_component_configer(chroma_store_configer)
         if hasattr(chroma_store_configer, "collection_name"):
             self.collection_name = chroma_store_configer.collection_name
