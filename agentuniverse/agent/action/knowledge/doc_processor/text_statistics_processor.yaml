@@ -1,0 +1,8 @@
+name: 'text_statistics_processor'
+description: 'annotate knowledge documents with deterministic text statistics'
+metadata_key: 'text_statistics'
+overwrite: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_statistics_processor'
+  class: 'TextStatisticsProcessor'
