@@ -18,16 +18,16 @@ from loguru import logger
 class BaseSLSLogSink(LogSink):
 
 
-    def process_record(self, record):
+    def process_record(self, record) -> None:
         raise NotImplementedError("Subclasses must implement process_record.")
 
-    def filter(self, record):
+    def filter(self, record) -> bool:
         if not record['extra'].get('log_type') == self.log_type:
             return False
         self.process_record(record)
         return True
 
-    def register_sink(self):
+    def register_sink(self) -> None:
         if LoggingConfig.log_extend_module_switch["sls_log"]:
             print(
                 f"biz_logger_is_in_coroutine_context={is_in_coroutine_context()}")
