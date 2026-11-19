@@ -17,6 +17,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class NodeData(BaseModel):
+    """Data model of a workflow node holding its output parameters."""
+
     outputs: Optional[List[NodeOutputParams]] = None
 
 
@@ -33,14 +35,31 @@ class Node(BaseModel):
     _data_cls = NodeData
 
     def __init__(self, **kwargs):
+        """Initialize the node and build its data model from the given data."""
         super().__init__(**kwargs)
         self._data = self._data_cls(**kwargs.get('data', {}))
 
     @abstractmethod
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Execute the node logic; implemented by concrete node subclasses.
+
+        Args:
+            workflow_output: The output of the workflow being executed.
+
+        Returns:
+            The NodeOutput produced by the node.
+        """
         raise NotImplementedError
 
     def run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Run the node against the given workflow output.
+
+        Args:
+            workflow_output: The output of the workflow being executed.
+
+        Returns:
+            The NodeOutput produced by the node.
+        """
         return self._run(workflow_output)
 
     @staticmethod
