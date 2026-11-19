@@ -1,0 +1,66 @@
+name: number_formatter_tool
+description: >-
+  Format numbers for human readers: thousands separators, fixed decimals,
+  prefix/suffix and currency (format), bytes to B/KB/MB/GB/TB/PB in binary
+  or decimal steps (file_size), seconds to a weeks/days/hours/minutes/
+  seconds combination (duration), fraction to percent (percentage), and
+  scientific notation (scientific). Pure Python, no dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.number_formatter_tool
+  class: NumberFormatterTool
+input_keys: [mode, value]
+# Largest absolute input magnitude accepted by any mode.
+max_abs_value: 1000000000000000000
+# Largest `decimals` value accepted by any mode (floats carry ~15 digits).
+max_decimals: 15
+args_model:
+  mode: {type: string, required: true, description: format, file_size, duration, percentage, or scientific}
+  value: {type: number, required: true, description: Number or numeric string to format}
+  decimals: {type: number, required: false, description: Fixed decimal places (mode-dependent default when omitted)}
+  thousands_separator: {type: boolean, required: false, default: true, description: Group thousands with commas in format/percentage/file_size}
+  prefix: {type: string, required: false, default: '', description: String placed before format output}
+  suffix: {type: string, required: false, default: '', description: String placed after format output}
+  currency: {type: string, required: false, description: 'usd, eur, gbp, cny or jpy; symbol placed before the number'}
+  system: {type: string, required: false, default: binary, description: 'file_size step system: binary (1024) or decimal (1000)'}
+  unit: {type: string, required: false, description: 'Force a file_size unit: B, KB, MB, GB, TB or PB (auto when omitted)'}
+  style: {type: string, required: false, default: compact, description: 'duration style: compact (1d 2h 3m) or verbose (1 day, 2 hours, 3 minutes)'}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [format, file_size, duration, percentage, scientific]
+      description: Formatting operation to run.
+    value:
+      oneOf:
+        - {type: number}
+        - {type: string}
+      description: Number to format (number or numeric string, commas tolerated).
+    decimals:
+      type: integer
+      minimum: 0
+      maximum: 15
+      description: Fixed decimal places; each mode has its own default.
+    thousands_separator:
+      type: boolean
+      default: true
+    prefix: {type: string}
+    suffix: {type: string}
+    currency:
+      type: string
+      enum: [usd, eur, gbp, cny, jpy]
+    system:
+      type: string
+      enum: [binary, decimal]
+      default: binary
+    unit:
+      type: string
+      enum: [B, KB, MB, GB, TB, PB]
+    style:
+      type: string
+      enum: [compact, verbose]
+      default: compact
+  required: [mode, value]
+  additionalProperties: false
