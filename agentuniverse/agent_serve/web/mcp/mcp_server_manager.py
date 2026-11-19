@@ -82,7 +82,7 @@ class MCPServerManager:
         }
     }
 
-    def register_mcp_tool(self, configer_instance: ComponentConfiger, configer_type: str):
+    def register_mcp_tool(self, configer_instance: ComponentConfiger, configer_type: str) -> None:
         if isinstance(configer_instance.as_mcp_tool, dict):
             mcp_tool_config = configer_instance.as_mcp_tool
             server_name = mcp_tool_config.get('server_name', DEFAULT_SERVER_NAME)
