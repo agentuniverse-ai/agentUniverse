@@ -29,11 +29,14 @@ class PaperSection:
         text: Content of the section.
         start_pos: Starting position in original text.
         end_pos: Ending position in original text.
+        section_hierarchy: Human-readable path from the top-level section to
+            this section.
     """
     name: str
     text: str
     start_pos: int
     end_pos: int
+    section_hierarchy: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -46,12 +49,16 @@ class Argument:
         section: Section containing this argument.
         citations: List of citations supporting this argument.
         position: Position in the section.
+        section_hierarchy: Human-readable path of the containing section.
+        claim_strength: Strength classification for this argument.
     """
     text: str
     argument_type: str
     section: str
     citations: List[str]
     position: int
+    section_hierarchy: Tuple[str, ...] = ()
+    claim_strength: str = 'moderate'
 
 
 class AcademicPaperFragmenter(DocProcessor):
@@ -145,7 +152,9 @@ class AcademicPaperFragmenter(DocProcessor):
 
         # If no sections detected, treat as single section
         if not sections:
-            sections = [PaperSection('full_text', text, 0, len(text))]
+            sections = [PaperSection(
+                'full_text', text, 0, len(text), ('full_text',)
+            )]
 
         # Step 2: Extract arguments from each section
         all_arguments = []
@@ -181,7 +190,15 @@ class AcademicPaperFragmenter(DocProcessor):
         lines = text.split('\n')
         current_pos = 0
 
-        section_boundaries = []  # List of (line_idx, section_name, start_pos)
+        # Each boundary stores the canonical section name alongside the
+        # human-readable title path. Number paths are local to this document,
+        # so hierarchy state cannot leak between calls.
+        section_boundaries: List[
+            Tuple[int, str, int, Tuple[str, ...]]
+        ] = []
+        numbered_hierarchies: Dict[
+            Tuple[str, ...], Tuple[str, ...]
+        ] = {}
 
         # Find section headers
         for line_idx, line in enumerate(lines):
@@ -191,36 +208,91 @@ class AcademicPaperFragmenter(DocProcessor):
                 current_pos += len(line) + 1
                 continue
 
-            # Check against section patterns
             matched = False
-            for section_name, pattern in self.section_patterns.items():
-                if re.match(pattern, line_stripped, re.IGNORECASE):
-                    section_boundaries.append((line_idx, section_name, current_pos))
-                    logger.debug(f"Found section '{section_name}' at line {line_idx}")
-                    matched = True
-                    break
 
-            # Additional detection for numbered sections (e.g., "1. ", "1.1 ", "1. Introduction")
+            # Check numbered headings before the configured patterns. Several
+            # configured patterns also match headings such as
+            # "1. Introduction"; parsing the number first preserves the
+            # hierarchy that would otherwise be discarded.
+            numbered_match = re.match(
+                r'^(\d+(\.\d+)*\.?)\s+'
+                r'([A-Za-z\u4e00-\u9fa5][A-Za-z\u4e00-\u9fa5\s]+)$',
+                line_stripped
+            )
+            if numbered_match:
+                section_number = numbered_match.group(1)
+                section_title = numbered_match.group(3).strip()
+                section_title_lower = section_title.lower()
+
+                # Preserve configured canonical names even though numbered
+                # headings are parsed first to retain their hierarchy.
+                section_name = None
+                for configured_name, pattern in self.section_patterns.items():
+                    if re.match(pattern, line_stripped, re.IGNORECASE):
+                        section_name = configured_name
+                        break
+
+                if not section_name:
+                    section_name = self._map_to_known_section(
+                        section_title_lower
+                    )
+
+                if not section_name:
+                    # Preserve the existing canonical naming behavior for
+                    # custom numbered sections.
+                    section_name = re.sub(
+                        r'[^\w\s]', '', section_title_lower
+                    ).strip().replace(' ', '_')
+
+                if section_name:
+                    number_path = tuple(
+                        section_number.rstrip('.').split('.')
+                    )
+                    parent_hierarchy = numbered_hierarchies.get(
+                        number_path[:-1], ()
+                    )
+                    section_hierarchy = parent_hierarchy + (section_title,)
+
+                    # Replacing a heading invalidates any previously recorded
+                    # descendants of the same number path.
+                    numbered_hierarchies = {
+                        path: hierarchy
+                        for path, hierarchy in numbered_hierarchies.items()
+                        if not (
+                            len(path) >= len(number_path)
+                            and path[:len(number_path)] == number_path
+                        )
+                    }
+                    numbered_hierarchies[number_path] = section_hierarchy
+                    section_boundaries.append((
+                        line_idx,
+                        section_name,
+                        current_pos,
+                        section_hierarchy,
+                    ))
+                    logger.debug(
+                        f"Found numbered section '{section_name}' "
+                        f"({section_number}) at line {line_idx}"
+                    )
+                    matched = True
+
+            # Check against configured section patterns for unnumbered
+            # headings. Such a heading starts a new top-level hierarchy.
             if not matched:
-                # Match patterns like "1. Introduction", "1.1 Background", "2. Methods"
-                numbered_match = re.match(r'^(\d+(\.\d+)*\.?)\s+([A-Za-z\u4e00-\u9fa5][A-Za-z\u4e00-\u9fa5\s]+)$', line_stripped)
-                if numbered_match:
-                    section_number = numbered_match.group(1)
-                    section_title = numbered_match.group(3).strip().lower()
-                    # Try to map to known sections
-                    section_name = self._map_to_known_section(section_title)
-                    if section_name:
-                        section_boundaries.append((line_idx, section_name, current_pos))
-                        logger.debug(f"Found numbered section '{section_name}' ({section_number}) at line {line_idx}")
+                for section_name, pattern in self.section_patterns.items():
+                    if re.match(pattern, line_stripped, re.IGNORECASE):
+                        section_boundaries.append((
+                            line_idx,
+                            section_name,
+                            current_pos,
+                            (line_stripped,),
+                        ))
+                        numbered_hierarchies.clear()
+                        logger.debug(
+                            f"Found section '{section_name}' at line {line_idx}"
+                        )
                         matched = True
-                    else:
-                        # If not a known section, use the section title as section name
-                        # This allows detection of custom sections like "1.1 Background"
-                        safe_title = re.sub(r'[^\w\s]', '', section_title).strip().replace(' ', '_')
-                        if safe_title:
-                            section_boundaries.append((line_idx, safe_title, current_pos))
-                            logger.debug(f"Found numbered custom section '{safe_title}' at line {line_idx}")
-                            matched = True
+                        break
 
             has_terminal_punctuation = line_stripped.endswith(
                 ('.', ',', ';', '!', '?', '。', '，', '；', '！', '？'))
@@ -242,7 +314,13 @@ class AcademicPaperFragmenter(DocProcessor):
                     section_title = line_stripped.lower()
                     section_name = self._map_to_known_section(section_title)
                     if section_name:
-                        section_boundaries.append((line_idx, section_name, current_pos))
+                        section_boundaries.append((
+                            line_idx,
+                            section_name,
+                            current_pos,
+                            (line_stripped,),
+                        ))
+                        numbered_hierarchies.clear()
                         logger.debug(f"Found simple header section '{section_name}' at line {line_idx}")
                         matched = True
 
@@ -252,14 +330,25 @@ class AcademicPaperFragmenter(DocProcessor):
                     section_title = line_stripped.lower()
                     section_name = self._map_to_known_section(section_title)
                     if section_name:
-                        section_boundaries.append((line_idx, section_name, current_pos))
+                        section_boundaries.append((
+                            line_idx,
+                            section_name,
+                            current_pos,
+                            (line_stripped,),
+                        ))
+                        numbered_hierarchies.clear()
                         logger.debug(f"Found CAPS section '{section_name}' at line {line_idx}")
                         matched = True
 
             current_pos += len(line) + 1
 
         # Create sections from boundaries
-        for i, (line_idx, section_name, start_pos) in enumerate(section_boundaries):
+        for i, (
+            line_idx,
+            section_name,
+            start_pos,
+            section_hierarchy,
+        ) in enumerate(section_boundaries):
             # Determine end position
             if i + 1 < len(section_boundaries):
                 end_pos = section_boundaries[i + 1][2]
@@ -279,7 +368,8 @@ class AcademicPaperFragmenter(DocProcessor):
                     name=section_name,
                     text=section_text,
                     start_pos=start_pos,
-                    end_pos=end_pos
+                    end_pos=end_pos,
+                    section_hierarchy=section_hierarchy,
                 ))
 
         return sections
@@ -349,7 +439,11 @@ class AcademicPaperFragmenter(DocProcessor):
                 argument_type=argument_type,
                 section=section.name,
                 citations=paragraph_citations,
-                position=idx
+                position=idx,
+                section_hierarchy=(
+                    section.section_hierarchy or (section.name,)
+                ),
+                claim_strength=self._classify_claim_strength(paragraph),
             )
 
             arguments.append(argument)
@@ -402,6 +496,56 @@ class AcademicPaperFragmenter(DocProcessor):
 
         # Default to general claim
         return 'claim'
+
+    def _classify_claim_strength(self, text: str) -> str:
+        """Classify how strongly an argument states its conclusion.
+
+        Weakening and negation signals take precedence over strong assertion
+        signals. This keeps hedged statements such as "may demonstrate" and
+        explicit negations such as "does not prove" from being classified as
+        strong claims.
+
+        Args:
+            text: Argument text to classify.
+
+        Returns:
+            One of ``strong``, ``moderate``, or ``weak``.
+        """
+        weak_patterns = [
+            r'\bweak\s+claim\b',
+            r'\b(preliminary|tentative|uncertain|inconclusive)\b',
+            r'\b(suggests?|may|might|could|possibly|potentially|'
+            r'appears?|seems?|likely)\b',
+            r'\bnot\s+(?!(?:only|merely|just)\b)(?:\w+\s+){0,4}'
+            r'(?:proves?|proved|proven|demonstrates?|demonstrated|confirms?|'
+            r'confirmed|establishes?|established)\b',
+            r"\b(?:cannot|can't)\s+(?:\w+\s+){0,4}"
+            r'(?:proves?|proved|proven|demonstrates?|demonstrated|confirms?|'
+            r'confirmed|establishes?|established)\b',
+            r'\b(?:by\s+no\s+means|fail(?:s|ed)?\s+to)\s+'
+            r'(?:\w+\s+){0,3}(?:proves?|proved|proven|demonstrates?|'
+            r'demonstrated|confirms?|confirmed|establishes?|established)\b',
+        ]
+        if any(
+            re.search(pattern, text, re.IGNORECASE)
+            for pattern in weak_patterns
+        ):
+            return 'weak'
+
+        strong_patterns = [
+            r'\bstrong\s+claim\b',
+            r'\b(definitively|definitely|conclusively|unequivocally|'
+            r'unambiguously)\b',
+            r'\b(proves?|proved|demonstrates?|demonstrated|confirms?|'
+            r'confirmed|establishes?|established)\b',
+        ]
+        if any(
+            re.search(pattern, text, re.IGNORECASE)
+            for pattern in strong_patterns
+        ):
+            return 'strong'
+
+        return 'moderate'
 
     def _parse_citations(self, text: str) -> List[str]:
         """Parse citations from the text.
@@ -488,7 +632,9 @@ class AcademicPaperFragmenter(DocProcessor):
                 'processing_timestamp': datetime.now().isoformat(),
                 'source_document_id': original_doc.id,
                 'section': arg.section,
+                'section_hierarchy': list(arg.section_hierarchy),
                 'argument_type': arg.argument_type,
+                'claim_strength': arg.claim_strength,
                 'position': arg.position,
             }
 

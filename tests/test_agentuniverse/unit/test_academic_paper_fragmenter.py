@@ -47,6 +47,27 @@ We collected data from participants.
         self.assertIn('abstract', sections)
         self.assertIn('introduction', sections)
 
+    def test_numbered_section_preserves_configured_name(self):
+        """Test numbered headings keep custom canonical section names."""
+        fragmenter = AcademicPaperFragmenter(
+            name='custom_fragmenter',
+            section_patterns={
+                'custom_key': r'^1\. Custom Heading',
+            },
+        )
+        doc = Document(text=(
+            '1. Custom Heading\n\n'
+            'This section contains enough text to become an argument.'
+        ))
+
+        result = fragmenter.process_docs([doc])
+
+        self.assertEqual(result[0].metadata['section'], 'custom_key')
+        self.assertEqual(
+            result[0].metadata['section_hierarchy'],
+            ['Custom Heading'],
+        )
+
     def test_citation_extraction(self):
         """Test citation extraction from text."""
         paper = """
@@ -181,6 +202,11 @@ Statistical analysis (p < 0.01) supports our claim.
 
         # Should create at least one document
         self.assertGreater(len(result), 0)
+        self.assertEqual(
+            result[0].metadata['section_hierarchy'],
+            ['full_text'],
+        )
+        self.assertEqual(result[0].metadata['claim_strength'], 'moderate')
 
     def test_multiple_papers(self):
         """Test processing multiple papers."""
@@ -223,12 +249,28 @@ We systematically gathered experimental samples from multiple sources.
         # Should detect hierarchy
         self.assertGreater(len(result), 2)
 
-        # Check for section hierarchy
-        has_hierarchy = any(
-            'section_hierarchy' in d.metadata
-            for d in result
+        metadata_by_text = {
+            fragment.text: fragment.metadata
+            for fragment in result
+        }
+        self.assertEqual(
+            metadata_by_text[
+                'Previous research has established foundational concepts [1].'
+            ]['section_hierarchy'],
+            ['Introduction', 'Background'],
         )
-        self.assertTrue(has_hierarchy)
+        self.assertEqual(
+            metadata_by_text[
+                'Current approaches have significant limitations that need addressing.'
+            ]['section_hierarchy'],
+            ['Introduction', 'Motivation'],
+        )
+        self.assertEqual(
+            metadata_by_text[
+                'We systematically gathered experimental samples from multiple sources.'
+            ]['section_hierarchy'],
+            ['Methods', 'Data Collection'],
+        )
 
     def test_citation_formats(self):
         """Test different citation format detection."""
@@ -277,21 +319,77 @@ We present our findings.
         paper = """
 Results
 
-Our method achieves 95% accuracy (strong claim).
-Preliminary results suggest improvements (weak claim).
-This definitively proves our hypothesis (strong claim).
+Our method definitively achieves 95% accuracy.
+Preliminary results suggest improvements.
+The method improves accuracy under these conditions.
+The method may definitively improve accuracy.
+This does not necessarily prove the alternative hypothesis.
+We do not prove the proposed relationship.
+The hypothesis is not conclusively demonstrated by the data.
+The claim was not confirmed by the experiment.
+Not demonstrated by the available evidence.
+We have not been able to demonstrate the effect.
+This result not only demonstrates accuracy but confirms robustness.
 """
         doc = Document(text=paper)
         result = self.fragmenter.process_docs([doc])
 
-        # Should detect different claim strengths
-        claim_strengths = set()
-        for doc in result:
-            if 'claim_strength' in doc.metadata:
-                claim_strengths.add(doc.metadata['claim_strength'])
-
-        # Should have variation in claim strength
-        self.assertGreaterEqual(len(claim_strengths), 1)
+        strength_by_text = {
+            fragment.text: fragment.metadata['claim_strength']
+            for fragment in result
+        }
+        self.assertEqual(
+            strength_by_text['Our method definitively achieves 95% accuracy.'],
+            'strong',
+        )
+        self.assertEqual(
+            strength_by_text['Preliminary results suggest improvements.'],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text['The method improves accuracy under these conditions.'],
+            'moderate',
+        )
+        self.assertEqual(
+            strength_by_text['The method may definitively improve accuracy.'],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text[
+                'This does not necessarily prove the alternative hypothesis.'
+            ],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text['We do not prove the proposed relationship.'],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text[
+                'The hypothesis is not conclusively demonstrated by the data.'
+            ],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text['The claim was not confirmed by the experiment.'],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text['Not demonstrated by the available evidence.'],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text[
+                'We have not been able to demonstrate the effect.'
+            ],
+            'weak',
+        )
+        self.assertEqual(
+            strength_by_text[
+                'This result not only demonstrates accuracy but confirms robustness.'
+            ],
+            'strong',
+        )
 
     def test_unicode_content(self):
         """Test handling of unicode characters."""
