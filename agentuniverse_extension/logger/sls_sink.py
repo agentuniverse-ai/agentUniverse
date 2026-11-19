@@ -228,7 +228,7 @@ class SlsSender:
         log_item_list.append(log_item)
         return self._send_put_logs_request(log_item_list, topic, source)
 
-    def put_log_queue(self, log_item: LogItem):
+    def put_log_queue(self, log_item: LogItem) -> None:
         """Put a single log item into the waiting queue.
 
         Args:
@@ -276,7 +276,7 @@ class SlsSender:
             return self._send_put_logs_request(log_item_list, topic, source)
         return None
 
-    def start_batch_send_thread(self):
+    def start_batch_send_thread(self) -> None:
         """Start the log sending thread."""
         if self.send_thread is None or not self.send_thread.is_alive():
             self.send_thread_stop_event.clear()
@@ -285,7 +285,7 @@ class SlsSender:
                 name="loop_send_log_thread", daemon=True)
             self.send_thread.start()
 
-    def stop_batch_send_thread(self):
+    def stop_batch_send_thread(self) -> None:
         """Stop the log sending thread."""
         if self.send_thread is not None:
             self.send_thread_stop_event.set()
