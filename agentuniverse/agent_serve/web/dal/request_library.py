@@ -26,6 +26,8 @@ Base = declarative_base()
 
 @singleton
 class RequestLibrary:
+    """Singleton library managing request persistence in a sql database (sqlite by default).
+    """
     def __init__(self, configer: Configer = None):
         """Init the database connection. Use uri in config file or use sqlite
         as default database."""
@@ -75,12 +77,19 @@ class RequestLibrary:
                                        self.sqldb_wrapper)
 
     def __init_request_table(self):
+        """Create the request table when it does not exist in the database yet.
+        """
         with self.sqldb_wrapper.sql_database._engine.connect() as conn:
             if not conn.dialect.has_table(conn, self.request_table_name):
                 Base.metadata.create_all(
                     self.sqldb_wrapper.sql_database._engine)
 
     def get_session(self):
+        """Return a new database session, initializing the request table and session factory on first use.
+
+        Returns:
+            A database session.
+        """
         if not self.session:
             self.__init_request_table()
             self.session = self.sqldb_wrapper.get_session()
