@@ -13,6 +13,8 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str):
+    """Run a chat conversation with the agent and print the response.
+    """
     instance: Agent = AgentManager().get_instance_obj('discussion_group_agent')
     instance.run(input=question)
 
