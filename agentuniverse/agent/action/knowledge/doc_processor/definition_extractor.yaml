@@ -1,0 +1,10 @@
+name: 'definition_extractor'
+description: 'Extract term-definition pairs from text into document metadata for glossary and concept mining'
+max_definitions: 50
+max_definition_length: 200
+max_term_words: 4
+dedup_by_term: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.definition_extractor'
+  class: 'DefinitionExtractor'
