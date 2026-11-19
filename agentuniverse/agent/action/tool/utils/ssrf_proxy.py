@@ -19,6 +19,15 @@ proxies = {
 
 
 def make_request(method, url, **kwargs):
+    """Send an HTTP request through the configured SSRF proxy.
+
+    Args:
+        method (str): the HTTP method, e.g. GET or POST.
+        url (str): the target URL.
+        **kwargs: extra arguments passed to httpx.request.
+    Returns:
+        httpx.Response: the HTTP response.
+    """
     kwargs.setdefault("timeout", 20)
     if SSRF_PROXY_ALL_URL:
         kwargs["proxy"] = SSRF_PROXY_ALL_URL
@@ -28,24 +37,30 @@ def make_request(method, url, **kwargs):
 
 
 def get(url, **kwargs):
+    """Send a GET request through the configured SSRF proxy."""
     return make_request('GET', url, **kwargs)
 
 
 def post(url, **kwargs):
+    """Send a POST request through the configured SSRF proxy."""
     return make_request('POST', url, **kwargs)
 
 
 def put(url, **kwargs):
+    """Send a PUT request through the configured SSRF proxy."""
     return make_request('PUT', url, **kwargs)
 
 
 def patch(url, **kwargs):
+    """Send a PATCH request through the configured SSRF proxy."""
     return make_request('PATCH', url, **kwargs)
 
 
 def delete(url, **kwargs):
+    """Send a DELETE request through the configured SSRF proxy."""
     return make_request('DELETE', url, **kwargs)
 
 
 def head(url, **kwargs):
+    """Send a HEAD request through the configured SSRF proxy."""
     return make_request('HEAD', url, **kwargs)
