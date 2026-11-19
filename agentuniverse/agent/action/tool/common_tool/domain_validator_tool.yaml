@@ -1,0 +1,43 @@
+name: domain_validator_tool
+description: Domain validator tool — pure Python stdlib, no network required. Validates a hostname against RFC-style rules (mode='validate': length <=253, labels 1-63 LDH charset, no leading/trailing hyphen, no empty label, dot required for FQDN, alphabetic TLD >=2 chars; IP literals get a dedicated ip_literal verdict), describes a hostname with a registered-domain guess, TLD, subdomain count and stdlib punycode/IDNA conversion in both directions (mode='info'), and classifies a TLD as known/unknown with category generic/country/new-gtld against a built-in indicative table (mode='tld_lookup').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.domain_validator_tool
+  class: DomainValidatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Inspection mode — validate, info or tld_lookup.
+    required: true
+  hostname:
+    type: string
+    description: The bare host name to inspect (no scheme, path, query or port; a single trailing root dot is stripped and reported). For tld_lookup either a bare TLD or a hostname whose last label is used.
+    required: false
+  allow_single_label:
+    type: boolean
+    description: Validate mode only — accept single-label hostnames such as localhost with a warning instead of rejecting them. Default false.
+    required: false
+  allow_underscores:
+    type: boolean
+    description: Validate mode only — accept underscores in labels leniently (warning instead of error), as many internal hostnames carry them despite not being RFC-compliant. Default false.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "info", "tld_lookup"]
+      description: Inspection mode.
+    hostname:
+      type: string
+      description: Bare host name (validate, info) or host/TLD (tld_lookup).
+    allow_single_label:
+      type: boolean
+      description: Accept single-label hostnames leniently (validate mode).
+    allow_underscores:
+      type: boolean
+      description: Accept underscores in labels leniently (validate mode).
+  required: ["mode"]
