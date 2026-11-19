@@ -54,7 +54,7 @@ class TestRarReaderBasic(unittest.TestCase):
 
         if files is None:
             files = self.create_test_files()
-        
+
         test_rar_path = os.path.join(self.temp_dir, "test_archive.rar")
 
         try:
@@ -78,10 +78,10 @@ class TestRarReaderBasic(unittest.TestCase):
 
         test_rar_path = self.create_test_rar()
         documents = self.reader._load_data(test_rar_path)
-        
+
         self.assertIsInstance(documents, list)
         self.assertGreater(len(documents), 0)
-        
+
         file_names = [doc.metadata.get('file_name') for doc in documents]
         self.assertIn('test.txt', file_names)
 
@@ -97,9 +97,9 @@ class TestRarReaderBasic(unittest.TestCase):
             "source": "test_suite",
             "version": "1.0.0"
         }
-        
+
         documents = self.reader._load_data(test_rar_path, ext_info=custom_metadata)
-        
+
         self.assertGreater(len(documents), 0)
         doc = documents[0]
         self.assertEqual(doc.metadata['source'], 'test_suite')
@@ -204,10 +204,10 @@ def transform_data(data):
             f.write("""class Model:
     def __init__(self):
         self.weights = []
-    
+
     def train(self, data):
         pass
-    
+
     def predict(self, data):
         return sum(data) if data else 0
 """)
@@ -265,10 +265,10 @@ class TestMain(unittest.TestCase):
 
         level3_dir = os.path.join(base_dir, "level3")
         os.makedirs(level3_dir, exist_ok=True)
-        
+
         with open(os.path.join(level3_dir, "deep_file.txt"), 'w', encoding='utf-8') as f:
             f.write("这是第三层的文件")
-        
+
         level3_rar = os.path.join(base_dir, "level3.rar")
         try:
             subprocess.run(
@@ -282,12 +282,12 @@ class TestMain(unittest.TestCase):
 
         level2_dir = os.path.join(base_dir, "level2")
         os.makedirs(level2_dir, exist_ok=True)
-        
+
         with open(os.path.join(level2_dir, "mid_file.txt"), 'w', encoding='utf-8') as f:
             f.write("这是第二层的文件")
-        
+
         shutil.copy(level3_rar, level2_dir)
-        
+
         level2_rar = os.path.join(base_dir, "level2.rar")
         try:
             subprocess.run(
@@ -301,12 +301,12 @@ class TestMain(unittest.TestCase):
 
         level1_dir = os.path.join(base_dir, "level1")
         os.makedirs(level1_dir, exist_ok=True)
-        
+
         with open(os.path.join(level1_dir, "top_file.txt"), 'w', encoding='utf-8') as f:
             f.write("这是第一层的文件")
-        
+
         shutil.copy(level2_rar, level1_dir)
-        
+
         final_rar = os.path.join(self.temp_dir, "nested_archive.rar")
         try:
             subprocess.run(
@@ -575,10 +575,10 @@ echo "Installation complete"
             f.write("""class Application:
     def __init__(self):
         self.plugins = []
-    
+
     def load_plugins(self):
         pass
-    
+
     def run(self):
         print("Application running")
 """)
@@ -694,7 +694,7 @@ if __name__ == "__main__":
         # Add README as txt file to ensure at least some content is extracted
         with open(os.path.join(doc_dir, "README.txt"), 'w', encoding='utf-8') as f:
             f.write("Documentation Archive\n\nThis archive contains API documentation, tutorials, and guides.")
-        
+
         with open(os.path.join(doc_dir, "api", "authentication.md"), 'w', encoding='utf-8') as f:
             f.write("""# 认证 API
 
@@ -820,7 +820,7 @@ app.run()
 
         csv_docs = [d for d in documents if d.metadata.get('file_suffix') == '.csv']
         self.assertGreater(len(csv_docs), 0)
-        
+
         for doc in csv_docs:
             self.assertEqual(doc.metadata.get('project'), 'sales_analysis')
             self.assertIn('销售额', doc.text)
@@ -849,7 +849,7 @@ app.run()
         documents = self.reader._load_data(rar_path)
 
         self.assertGreater(len(documents), 0)
-        
+
         md_docs = [d for d in documents if d.metadata.get('file_suffix') == '.md']
         if len(md_docs) > 0:
             self.assertEqual(len(md_docs), 3)
