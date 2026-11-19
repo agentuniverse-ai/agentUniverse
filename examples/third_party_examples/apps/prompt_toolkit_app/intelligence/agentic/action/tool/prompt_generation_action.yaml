@@ -1,0 +1,47 @@
+name: 'prompt_generation_action'
+description: |
+  Generate a structured prompt from a scenario description. Optional inputs
+  include content, target_audience, domain, constraints, examples, tone,
+  complexity (simple, medium, or complex), and custom_requirements.
+tool_type: 'func'
+input_keys:
+  - 'scenario_description'
+args_model:
+  scenario_description: {type: string, required: true, description: Scenario to generate a prompt for}
+  content: {type: string, required: false, description: Additional content or requirements}
+  target_audience: {type: string, required: false, description: Intended audience}
+  domain: {type: string, required: false, description: Application domain}
+  constraints: {type: array, required: false, description: Prompt constraints}
+  examples: {type: array, required: false, description: Example input/output objects}
+  tone: {type: string, required: false, description: Desired response tone}
+  complexity: {type: string, required: false, description: simple, medium, or complex}
+  custom_requirements: {type: string, required: false, description: Additional custom requirements}
+args_model_schema:
+  type: object
+  properties:
+    scenario_description: {type: string, minLength: 1}
+    content: {type: string}
+    target_audience: {type: string}
+    domain: {type: string}
+    constraints:
+      type: array
+      items: {type: string}
+    examples:
+      type: array
+      items:
+        type: object
+        properties:
+          input: {type: string}
+          output: {type: string}
+        additionalProperties: false
+    tone: {type: string}
+    complexity:
+      type: string
+      enum: [simple, medium, complex]
+    custom_requirements: {type: string}
+  required: [scenario_description]
+  additionalProperties: false
+metadata:
+  type: 'TOOL'
+  module: 'examples.third_party_examples.apps.prompt_toolkit_app.intelligence.agentic.action.tool.prompt_generation_action'
+  class: 'PromptGenerationAction'

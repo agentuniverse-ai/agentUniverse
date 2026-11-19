@@ -1,0 +1,34 @@
+name: 'prompt_optimization_action'
+description: |
+  Optimize an existing prompt and report quality scores and recommendations.
+  Required inputs are introduction, target, and instruction. The optional
+  strategies input accepts clarity, structure, specificity, efficiency, and
+  comprehensiveness.
+tool_type: 'func'
+input_keys:
+  - 'introduction'
+  - 'target'
+  - 'instruction'
+args_model:
+  introduction: {type: string, required: true, description: Existing prompt introduction}
+  target: {type: string, required: true, description: Existing prompt target}
+  instruction: {type: string, required: true, description: Existing prompt instruction}
+  strategies: {type: array, required: false, description: Optimization strategies}
+args_model_schema:
+  type: object
+  properties:
+    introduction: {type: string}
+    target: {type: string}
+    instruction: {type: string}
+    strategies:
+      type: array
+      items:
+        type: string
+        enum: [clarity, structure, specificity, efficiency, comprehensiveness]
+      default: [clarity, structure]
+  required: [introduction, target, instruction]
+  additionalProperties: false
+metadata:
+  type: 'TOOL'
+  module: 'examples.third_party_examples.apps.prompt_toolkit_app.intelligence.agentic.action.tool.prompt_optimization_action'
+  class: 'PromptOptimizationAction'

@@ -42,8 +42,10 @@
 ### 基本使用
 
 ```python
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit,
-    PromptGenerationRequest
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
+    PromptGenerationRequest,
+    PromptToolkit,
+)
 
 # 初始化工具包
 toolkit = PromptToolkit()
@@ -70,7 +72,7 @@ print(f"指令: {result.generated_prompt.instruction}")
 
 ```python
 from agentuniverse.prompt.prompt_model import AgentPromptModel
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
 
 # 创建要优化的prompt
 prompt = AgentPromptModel(
@@ -92,7 +94,7 @@ print(f"改进建议: {result.suggestions}")
 ### 场景分析
 
 ```python
-from agentuniverse.prompt.scenario_analyzer import ScenarioAnalyzer
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalyzer
 
 # 初始化分析器
 analyzer = ScenarioAnalyzer()
@@ -111,8 +113,11 @@ print(f"置信度: {result.confidence_score}")
 
 ```python
 from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkitConfig
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import (
+    PromptComplexity,
+    PromptScenario,
+)
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
 
 config = PromptToolkitConfig(
     enable_auto_optimization=True,
@@ -162,10 +167,21 @@ python demo_prompt_toolkit.py
 2. 配置相应的组件路径
 3. 使用生成的prompt配置创建agent
 
-```yaml
+```toml
 # config.toml
 [CORE_PACKAGE]
-prompt = ['your_app.intelligence.agentic.prompt']
+tool = ['examples.third_party_examples.apps.prompt_toolkit_app.intelligence.agentic.action.tool']
+prompt = ['examples.third_party_examples.apps.prompt_toolkit_app.intelligence.agentic.prompt']
+```
+
+在 Agent 配置中可通过标准的 `action.tool` 字段引用这三个工具：
+
+```yaml
+action:
+  tool:
+    - 'prompt_generation_action'
+    - 'prompt_optimization_action'
+    - 'scenario_analysis_action'
 ```
 
 ## 最佳实践
