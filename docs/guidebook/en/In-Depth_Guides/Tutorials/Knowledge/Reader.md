@@ -52,7 +52,15 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
+- [default_yaml_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/yaml_reader.yaml): Reads YAML and YML files, including multi-document YAML streams.
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
+
+### YAML and YML reader
+
+`default_yaml_reader` uses safe YAML loading and returns one `Document` for each
+non-empty YAML document in a stream. `metadata["document_index"]` records the
+source document position, and malformed YAML is reported as an actionable
+`ValueError` with the original parser error chained as its cause.
