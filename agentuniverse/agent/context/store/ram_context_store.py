@@ -267,7 +267,7 @@ class RamContextStore(ContextStore):
             del session_storage[segment_id]
 
         # Clean up empty session
-        if len(session_storage) == 0:
+        if not session_storage:
             del self._storage[session_id]
 
         if self.enable_metrics:
