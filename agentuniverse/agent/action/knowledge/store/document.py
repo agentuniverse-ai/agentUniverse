@@ -31,7 +31,7 @@ class Document(BaseModel):
 
     @model_validator(mode='before')
     def create_id(cls, values):
-        text: str = values.get('text', '')
+        text: str = values.get('text') or ''
         if not values.get('id'):
             values['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
         return values
