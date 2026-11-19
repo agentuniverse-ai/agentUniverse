@@ -95,6 +95,14 @@ class QdrantStore(Store):
                 vectors_config={self.VECTOR_NAME: VectorParams(size=dim, distance=metric)},
             )
 
+    @staticmethod
+    def _point_id(document_id: str) -> str:
+        """Return the Qdrant-compatible ID used for a document."""
+        try:
+            return str(uuid.UUID(str(document_id)))
+        except (ValueError, TypeError, AttributeError):
+            return str(uuid.uuid5(uuid.NAMESPACE_URL, str(document_id)))
+
     def query(self, query: Query, **kwargs) -> List[Document]:
         if self.client is None:
             return []
@@ -138,12 +146,12 @@ class QdrantStore(Store):
 
             self._ensure_collection(dim=len(vector))
 
-            payload = {"text": document.text, "metadata": document.metadata}
-            try:
-                point_id = str(uuid.UUID(str(document.id)))
-            except Exception:
-                # fallback to deterministic UUID5 if document id is not UUID
-                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, str(document.id)))
+            payload = {
+                "id": str(document.id),
+                "text": document.text,
+                "metadata": document.metadata,
+            }
+            point_id = self._point_id(document.id)
             points.append(
                 PointStruct(
                     id=point_id,
@@ -161,7 +169,10 @@ class QdrantStore(Store):
     def delete_document(self, document_id: str, **kwargs):
         if self.client is None:
             return
-        self.client.delete(collection_name=self.collection_name, points_selector=[document_id])
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=[self._point_id(document_id)],
+        )
 
     @staticmethod
     def to_documents(results) -> List[Document]:
@@ -179,7 +190,7 @@ class QdrantStore(Store):
                 vector = []
             documents.append(
                 Document(
-                    id=str(scored_point.id),
+                    id=str(payload.get("id") or scored_point.id),
                     text=text,
                     embedding=vector,
                     metadata=metadata,
