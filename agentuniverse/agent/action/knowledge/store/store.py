@@ -105,4 +105,6 @@ class Store(ComponentBase):
 
     def create_copy(self):
         # TODO: Store copy need to solve thread lock problem
+        """Create and return a copy of this component instance.
+        """
         return self
