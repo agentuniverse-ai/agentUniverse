@@ -44,6 +44,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
     def on_agent_action(
             self, action: AgentAction, color: Optional[str] = None, **kwargs: Any
     ) -> Any:
+        """Push a ReAct event carrying the action log as a 'Thought:' output into the stream queue."""
         self.queueStream.put_nowait({
             "type": "ReAct",
             "data": {
@@ -64,6 +65,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             inputs: Optional[Dict[str, Any]] = None,
             **kwargs: Any,
     ) -> Any:
+        """Record the tool call input into the conversation memory module, keyed by a pair id derived from the run id."""
         ConversationMemoryModule().add_tool_input_info(
             start_info={
                 "source": self.agent_info.get('name'),
@@ -85,6 +87,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             parent_run_id: Optional[UUID] = None,
             **kwargs: Any,
     ) -> Any:
+        """Push the generated token as a 'token' event into the stream queue."""
         # add token chunk to the queue.
         self.queueStream.put_nowait({
             "type": "token",
@@ -166,6 +169,12 @@ class OpenAIProtocolStreamOutPutCallbackHandler(BaseCallbackHandler):
         self.agent_info = agent_info
 
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
+        """Encode agent_output as an OpenAI chat.completion.chunk message and put it on the output stream queue.
+
+        Args:
+        output_stream: Queue receiving the JSON-encoded chunk.
+        agent_output: Assistant text carried by the chunk delta.
+        """
         if not output_stream:
             return
         output = {
@@ -207,6 +216,7 @@ class OpenAIProtocolStreamOutPutCallbackHandler(BaseCallbackHandler):
             inputs: Optional[Dict[str, Any]] = None,
             **kwargs: Any,
     ) -> Any:
+        """Record the tool call input into the conversation memory module, keyed by a pair id derived from the run id."""
         ConversationMemoryModule().add_tool_input_info(
             start_info={
                 "source": self.agent_info.get('name'),
@@ -229,6 +239,7 @@ class OpenAIProtocolStreamOutPutCallbackHandler(BaseCallbackHandler):
             parent_run_id: Optional[UUID] = None,
             **kwargs: Any,
     ) -> Any:
+        """Forward each newly generated token to the output stream via add_output_stream."""
         self.add_output_stream(self.queueStream, token)
 
     def on_tool_end(
@@ -293,6 +304,7 @@ class InvokeCallbackHandler(BaseCallbackHandler):
             metadata: Optional[Dict[str, Any]] = None,
             **kwargs: Any,
     ) -> Any:
+        """Record the prompt sent to the LLM as llm input info in the conversation memory module, keyed by the run id."""
         prompt = "\n".join(prompts)
 
         start_info = {
@@ -310,6 +322,7 @@ class InvokeCallbackHandler(BaseCallbackHandler):
             parent_run_id: Optional[UUID] = None,
             **kwargs: Any,
     ) -> Any:
+        """Record the LLM generated text as llm output info in the conversation memory module, keyed by the run id."""
         start_info = {
             "source": self.source,
             "type": "agent",
