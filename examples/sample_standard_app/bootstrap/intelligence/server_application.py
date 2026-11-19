@@ -17,6 +17,8 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the application server.
+        """
         AgentUniverse().start()
         start_web_server()
 
