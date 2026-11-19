@@ -93,10 +93,11 @@ class ComponentConfiger(object):
         try:
             for k, v in configer.value.items():
                 self.__dict__[k] = v
-            if configer.value.get('metadata'):
-                self.__metadata_type = configer.value.get('metadata').get('type')
-                self.__metadata_module = configer.value.get('metadata').get('module')
-                self.__metadata_class = configer.value.get('metadata').get('class')
+            metadata = configer.value.get('metadata')
+            if isinstance(metadata, dict) and metadata:
+                self.__metadata_type = metadata.get('type')
+                self.__metadata_module = metadata.get('module')
+                self.__metadata_class = metadata.get('class')
             elif configer.path and 'prompt' in configer.path:
                 self.__metadata_type = ComponentEnum.PROMPT.value
             self.__meta_class = configer.value.get('meta_class')
