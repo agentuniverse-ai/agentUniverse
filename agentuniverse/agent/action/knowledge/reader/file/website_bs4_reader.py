@@ -37,6 +37,8 @@ class WebsiteBs4Reader(Reader):
     max_links: int = Field(default=1, description="Maximum number of links to crawl")
     
     def __init__(self, **data):
+        """Initialize the website bs4 reader.
+        """
         super().__init__(**data)
         self._visited = set()  # Track visited URLs
         self._urls_to_crawl = []  # Queue of URLs to crawl
