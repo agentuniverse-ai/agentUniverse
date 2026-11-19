@@ -108,6 +108,8 @@ class AgentUniverseService(agentuniverse_service_pb2_grpc.AgentUniverseService):
 
 
 def set_grpc_config(configer):
+    """Apply the grpc server configuration from the configer.
+    """
     config_value = getattr(configer, "value", {})
     if not isinstance(config_value, dict):
         config_value = {}
