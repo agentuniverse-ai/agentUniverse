@@ -16,4 +16,6 @@ class SearchAgent(AgentTemplate):
     """
     
     def __init__(self, **kwargs):
+        """Initialize the search agent.
+        """
         super().__init__(**kwargs)
