@@ -1,0 +1,47 @@
+name: acronym_expander_tool
+description: Acronym expander tool — pure Python stdlib, no network required. Detect acronyms in text with counts and first occurrence spans (mode='detect'), resolve acronym lists to expansions via a user glossary plus a built-in tech glossary with unknown marking (mode='expand'), and expand the first occurrence of each known acronym inline as 'API (Application Programming Interface)' with an idempotent second-pass guard (mode='replace').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.acronym_expander_tool
+  class: AcronymExpanderTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — detect, expand or replace.
+    required: true
+  text:
+    type: string
+    description: The text to scan. Required for the detect and replace modes; not used by expand mode.
+    required: false
+  acronyms:
+    type: array
+    description: The acronyms to resolve — a list of strings or a single comma/space separated string. Required for the expand mode.
+    required: false
+  glossary:
+    type: object
+    description: Optional user glossary of acronym to expansion; user definitions win over the built-in tech glossary. Used by the expand and replace modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["detect", "expand", "replace"]
+      description: Operation mode.
+    text:
+      type: string
+      description: Text to scan for acronyms (detect and replace modes).
+    acronyms:
+      type: array
+      items:
+        type: string
+      description: Acronyms to resolve (expand mode); a single comma/space separated string is also accepted.
+    glossary:
+      type: object
+      additionalProperties:
+        type: string
+      description: User glossary of acronym to expansion; takes precedence over the built-in glossary (expand and replace modes).
+  required: ["mode"]
