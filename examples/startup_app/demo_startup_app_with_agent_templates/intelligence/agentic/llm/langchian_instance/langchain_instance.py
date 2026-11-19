@@ -18,17 +18,20 @@ from langchain_core.outputs import GenerationChunk
 
 
 class LangChainInstance(LangChainLLM):
+    """LangChain-compatible wrapper that adapts an agentUniverse LLM to the LangChain BaseLLM interface."""
     llm: LLM = None
     llm_type: str = "AgentUniverse"
     streaming: bool = False
 
     def __init__(self, llm: LLM, llm_type: str, **kwargs):
+        """Wrap the given agentUniverse LLM. Args: llm (LLM): The agentUniverse LLM instance. llm_type (str): Identifier exposed through _llm_type. **kwargs: Passed on to the superclass."""
         super().__init__(**kwargs)
         self.llm = llm
         self.llm_type = llm_type
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None,
               run_manager: Optional[CallbackManagerForLLMRun] = None, **kwargs: Any) -> str:
+        """Invoke the wrapped LLM synchronously. When streaming is off the raw text is returned; otherwise the streamed tokens are aggregated. Args: prompt (str): The prompt. stop (Optional[List[str]]): Optional stop words. run_manager: Optional LangChain run manager. **kwargs: Extra call options. Returns: str: The generated text."""
         should_stream = kwargs.pop("streaming", False) if "streaming" in kwargs else self.streaming
         llm_output = self.llm.call(prompt=prompt, stop=stop, **kwargs)
         if not should_stream:
@@ -42,6 +45,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> str:
+        """Invoke the wrapped LLM asynchronously. When streaming is off the raw text is returned; otherwise the streamed tokens are aggregated. Args: prompt (str): The prompt. stop (Optional[List[str]]): Optional stop words. run_manager: Optional async run manager. **kwargs: Extra call options. Returns: str: The generated text."""
         should_stream = kwargs.pop("streaming", False) if "streaming" in kwargs else self.streaming
         llm_output = await self.llm.acall(prompt=prompt, stop=stop, **kwargs)
         if not should_stream:
@@ -55,6 +59,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> Iterator[GenerationChunk]:
+        """Stream the wrapped LLM call and yield one GenerationChunk per received token. Args: prompt (str): The prompt. stop (Optional[List[str]]): Optional stop words. run_manager: Optional run manager. **kwargs: Extra call options. Yields: GenerationChunk: The streamed tokens."""
         kwargs['stream'] = True
         llm_output = self.llm.call(prompt=prompt, stop=stop, **kwargs)
         for line in llm_output:
@@ -67,6 +72,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> AsyncIterator[GenerationChunk]:
+        """Asynchronously stream the wrapped LLM call and yield one GenerationChunk per received token. Args: prompt (str): The prompt. stop (Optional[List[str]]): Optional stop words. run_manager: Optional async run manager. **kwargs: Extra call options. Yields: GenerationChunk: The streamed tokens."""
         kwargs['stream'] = True
         llm_output = await self.llm.acall(prompt=prompt, stop=stop, **kwargs)
         async for line in llm_output:
