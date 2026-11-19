@@ -382,6 +382,8 @@ class Agent(ComponentBase, ABC):
         tool_name_list = list(self.agent_model.action.get('tool') or [])
         for toolkit_name in self.agent_model.action.get('toolkit', []):
             toolkit = ToolkitManager().get_instance_obj(toolkit_name)
+            if toolkit is None:
+                continue
             tool_name_list.extend(toolkit.tool_names)
         return tool_name_list
 
