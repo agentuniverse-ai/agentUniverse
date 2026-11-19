@@ -447,6 +447,73 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
+
+    def test_rejects_unsafe_archive_entry_names(self):
+        unsafe_names = [
+            "../escape.txt",
+            "safe/../../escape.txt",
+            "/tmp/escape.txt",
+            r"..\escape.txt",
+            r"safe\..\escape.txt",
+            r"C:\Windows\escape.txt",
+        ]
+        for entry_name in unsafe_names:
+            with self.subTest(entry_name=entry_name):
+                self.assertTrue(self.reader._is_unsafe_entry_name(entry_name))
+
+        self.assertFalse(self.reader._is_unsafe_entry_name("docs/readme.txt"))
+
+    def test_resolved_output_path_must_stay_under_extract_root(self):
+        root = Path(self.temp_dir) / "extract"
+        root.mkdir()
+
+        self.assertTrue(
+            self.reader._is_resolved_path_under(root / "safe" / "file.txt", root)
+        )
+        self.assertFalse(
+            self.reader._is_resolved_path_under(root / ".." / "escape.txt", root)
+        )
+
+    def test_extracts_multiple_safe_members_and_skips_unsafe_members(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+
+        source_dir = os.path.join(self.temp_dir, "source")
+        os.makedirs(source_dir, exist_ok=True)
+        alpha_path = os.path.join(source_dir, "alpha.txt")
+        beta_path = os.path.join(source_dir, "beta.txt")
+        gamma_path = os.path.join(source_dir, "gamma.txt")
+        for path, content in [
+            (alpha_path, "alpha content"),
+            (beta_path, "beta content"),
+            (gamma_path, "gamma content"),
+        ]:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        sevenzip_path = os.path.join(self.temp_dir, "mixed_safe_unsafe.7z")
+        try:
+            with py7zr.SevenZipFile(sevenzip_path, "w") as archive:
+                archive.write(alpha_path, "safe/alpha.txt")
+                archive.write(beta_path, "safe/beta.txt")
+                archive.write(gamma_path, "nested/gamma.txt")
+                archive.write(alpha_path, "../escape.txt")
+                archive.write(beta_path, r"C:\Windows\escape.txt")
+        except Exception as e:
+            self.skipTest(f"Failed to create mixed safe/unsafe 7Z: {e}")
+
+        documents = self.reader._load_data(sevenzip_path)
+
+        extracted_names = {doc.metadata.get("file_name") for doc in documents}
+        self.assertEqual(extracted_names, {"alpha.txt", "beta.txt", "gamma.txt"})
+        archive_paths = {doc.metadata.get("archive_path") for doc in documents}
+        self.assertEqual(
+            archive_paths,
+            {"safe/alpha.txt", "safe/beta.txt", "nested/gamma.txt"}
+        )
+
     def test_empty_7z_archive(self):
         try:
             import py7zr
