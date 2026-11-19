@@ -12,6 +12,16 @@ from pydantic import BaseModel, Field
 
 
 class SessionDO(BaseModel):
+    """Data object for a session record.
+
+    Attributes:
+        id: Primary key of the session record.
+        session_id: Unique session ID.
+        agent_id: ID of the agent the session belongs to.
+        ext_info: Extra session information.
+        gmt_created: Record creation time.
+        gmt_modified: Record last modification time.
+    """
     id: Optional[int] = Field(description="ID", default=None)
     session_id: str = Field(description="Session id")
     agent_id: str = Field(description="Agent id.")
