@@ -528,6 +528,12 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _apply_metadata(presentation: Any, metadata: dict[str, str]) -> None:
+        """Apply validated metadata values to a presentation's core properties.
+
+        Args:
+            presentation: python-pptx presentation object to update.
+            metadata: Mapping of allowed core-property fields to string values.
+        """
         props = presentation.core_properties
         for field, value in metadata.items():
             setattr(props, field, value)
@@ -538,6 +544,13 @@ class PowerPointTool(Tool):
         spec: dict[str, Any],
         Inches: Any,
     ) -> None:
+        """Add one validated slide spec to a presentation, resolving its layout.
+
+        Args:
+            presentation: python-pptx presentation object to extend.
+            spec: Validated slide spec to render.
+            Inches: Inches helper used to size added shapes.
+        """
         layout_name = spec["layout"]
         if layout_name == "auto":
             layout_name = "title" if spec["subtitle"] and not spec["bullets"] and not spec["table"] else "title_content"
@@ -595,6 +608,15 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _find_body_placeholder(slide: Any, title_shape: Any) -> Any | None:
+        """Return the first text-frame placeholder on the slide other than its title.
+
+        Args:
+            slide: python-pptx slide to inspect.
+            title_shape: Title placeholder to skip, or None.
+
+        Returns:
+            First matching placeholder shape, or None.
+        """
         for shape in slide.placeholders:
             if not getattr(shape, "has_text_frame", False):
                 continue
@@ -614,6 +636,12 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _set_bullets(text_frame: Any, bullets: list[dict[str, Any]]) -> None:
+        """Repopulate a text frame with the given bullet texts and levels.
+
+        Args:
+            text_frame: python-pptx text frame to rewrite.
+            bullets: Normalized bullet dicts with text and level keys.
+        """
         text_frame.clear()
         for index, bullet in enumerate(bullets):
             paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
@@ -621,6 +649,12 @@ class PowerPointTool(Tool):
             paragraph.level = bullet["level"]
 
     def _atomic_save(self, presentation: Any, file_path: str) -> None:
+        """Save a presentation to file_path via a temporary file and os.replace, enforcing write limits.
+
+        Args:
+            presentation: python-pptx presentation object to save.
+            file_path: Destination path for the saved file.
+        """
         directory = os.path.dirname(file_path)
         os.makedirs(directory, exist_ok=True)
         temporary_path = None
@@ -645,6 +679,15 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _bounded_text(text: Any, remaining: int) -> tuple[str, int, bool]:
+        """Bound text to a remaining character budget, reporting truncation.
+
+        Args:
+            text: Value to bound, coerced to a stripped string.
+            remaining: Characters remaining in the budget.
+
+        Returns:
+            Tuple of bounded text, remaining budget, and whether text was truncated.
+        """
         normalized = str(text or "").strip()
         if not normalized:
             return "", remaining, False
@@ -672,13 +715,24 @@ class _ReadBudget:
     __slots__ = ("remaining_chars", "truncated")
 
     def __init__(self, tool: "PowerPointTool") -> None:
+        """Initialize the read budget, seeding remaining chars from a tool's text limit.
+
+        Args:
+            tool: PowerPointTool whose max_text_chars seeds the budget.
+        """
         self.remaining_chars = tool.max_text_chars
         self.truncated = False
 
     def chars_exhausted(self) -> bool:
+        """Return True when the character budget is exhausted.
+
+        Returns:
+            True when no characters remain in the budget.
+        """
         return self.remaining_chars <= 0
 
     def mark_truncated(self) -> None:
+        """Record that the read result was truncated."""
         self.truncated = True
 
     def consume_text(self, value: Any) -> tuple[str, bool]:
