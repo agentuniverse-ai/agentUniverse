@@ -10,6 +10,11 @@ from agentuniverse.agent.output_object import OutputObject
 
 
 class ParamConverterTool(Tool):
+    """Tool that converts input parameters into a dict keyed by a 'result' parameter.
+
+    The key ending with 'result' becomes the outer key and the remaining
+    parameters are wrapped into an OutputObject as its value.
+    """
 
     def execute(self, params: dict):
         """
