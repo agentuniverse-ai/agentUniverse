@@ -144,7 +144,7 @@ class AgentSpanManager:
         init_new_token_usage()
         return self.span
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Cleanup span and context."""
         add_current_token_usage_to_parent()
         if self.span:
@@ -277,7 +277,7 @@ class AgentInstrumentor(BaseInstrumentor):
         self._original_agent_wrapper_sync = None
         self._original_agent_wrapper_async = None
 
-    def instrumentation_dependencies(self):
+    def instrumentation_dependencies(self) -> list:
         return []
 
     def _instrument(self, **kwargs):
@@ -376,7 +376,7 @@ class AgentInstrumentor(BaseInstrumentor):
                             span: Span, labels: Dict[str, str]) -> Any:
         """Wrap output stream queue to monitor first token time."""
 
-        def on_first_put(first_put_time: float):
+        def on_first_put(first_put_time: float) -> None:
             duration = first_put_time - start_time
             self._metrics_recorder.record_first_token(duration, labels)
             AgentSpanAttributesSetter.set_first_token_attributes(span,
