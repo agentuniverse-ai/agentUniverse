@@ -109,7 +109,12 @@ class QdrantMemoryStorage(MemoryStorage):
         if source:
             must_conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
         if type_value:
-            must_conditions.append(FieldCondition(key="type", match=MatchValue(value=type_value[0])))
+            # type 可为字符串（Memory.summarize_memory 传 type='summarize'）或列表。
+            # 字符串的 [0] 取首个字符（'s'），匹配不到任何 payload。
+            types = type_value if isinstance(type_value, list) else [type_value]
+            must_conditions.extend(
+                FieldCondition(key="type", match=MatchValue(value=t)) for t in types
+            )
         if not must_conditions:
             return None
         return Filter(must=must_conditions)
