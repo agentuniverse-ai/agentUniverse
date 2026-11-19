@@ -1,0 +1,19 @@
+name: 'citation_extractor'
+description: 'find quotations and citation markers in documents and stamp them into metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.citation_extractor'
+  class: 'CitationExtractor'
+
+# Maximum number of citations kept in the metadata list; detections beyond
+# this cap are discarded and the per-kind counts reflect the kept list.
+# Must be >= 1.
+max_citations: 100
+
+# Metadata key the citation list is written to; '' disables stamping.
+citations_key: 'citations'
+
+# Metadata key the per-kind count mapping is written to; '' disables
+# stamping.
+count_key: 'citation_count'
