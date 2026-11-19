@@ -17,7 +17,7 @@ if str(project_root) not in sys.path:
 from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import optimize_existing_prompt
 
 
-def demo_basic_prompt_optimization():
+def demo_basic_prompt_optimization() -> None:
     """Demonstrate basic prompt optimization functionality."""
     print("Basic Prompt Optimization Demo")
     print("-" * 50)
@@ -61,7 +61,7 @@ def demo_basic_prompt_optimization():
             print(f"Optimization Failed: {e}\n")
 
 
-def demo_advanced_prompt_optimization():
+def demo_advanced_prompt_optimization() -> None:
     """Demonstrate advanced prompt optimization functionality."""
     print("Advanced Prompt Optimization Demo")
     print("-" * 50)
@@ -103,7 +103,7 @@ def demo_advanced_prompt_optimization():
             print(f"Optimization Failed: {e}\n")
 
 
-def demo_yaml_prompt_optimization():
+def demo_yaml_prompt_optimization() -> None:
     """Demonstrate YAML format prompt optimization."""
     print("YAML Format Prompt Optimization Demo")
     print("-" * 50)
