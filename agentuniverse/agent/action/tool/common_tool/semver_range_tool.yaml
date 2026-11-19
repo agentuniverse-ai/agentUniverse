@@ -1,0 +1,54 @@
+name: semver_range_tool
+description: npm-style semantic-version range tool — pure Python stdlib, no network required. Check whether a version satisfies an npm package.json range (mode='satisfies'), expand a range into its primitive comparators (mode='explain'), filter and sort a candidate list against a range (mode='versions'), and intersect two ranges into a simplified equivalent or an empty verdict (mode='intersect'). Full npm grammar: tilde ~, caret ^ with the 0.x special cases, hyphen ranges with partial upper bounds, x-ranges (1.2.x, *), comparison primitives with partial right-hand sides, whitespace AND conjunctions, || unions, and the npm prerelease rule (a prerelease only matches when a comparator of the matching branch carries a prerelease on the same major.minor.patch tuple).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.semver_range_tool
+  class: SemverRangeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — satisfies, explain, versions or intersect.
+    required: true
+  version:
+    type: string
+    description: The version to check (required for the satisfies mode). An optional leading 'v' is accepted and stripped; build metadata is validated and ignored for matching.
+    required: false
+  version_range:
+    type: string
+    description: The npm range expression (required for every mode; first range of the intersect mode) — e.g. '^1.2.3', '~1.2', '1.2.x', '1.2.3 - 2.3', '>=1.2.3 <2.0.0', '^1.0.0 || ^2.0.0' or '*' for any.
+    required: false
+  versions:
+    type: array
+    items:
+      type: string
+    description: Candidate version list for the versions mode (bounded to 1000 entries); matched versions come back sorted by semver precedence with min/max satisfying extremes.
+    required: false
+  version_range_b:
+    type: string
+    description: The second range expression for the intersect mode (same grammar as version_range).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["satisfies", "explain", "versions", "intersect"]
+      description: Operation mode.
+    version:
+      type: string
+      description: Version to range-check (satisfies mode).
+    version_range:
+      type: string
+      description: npm range expression (satisfies, explain, versions, intersect modes; first range for intersect).
+    versions:
+      type: array
+      items:
+        type: string
+      description: Candidate versions to filter and sort (versions mode).
+    version_range_b:
+      type: string
+      description: Second npm range expression (intersect mode).
+  required: ["mode"]
