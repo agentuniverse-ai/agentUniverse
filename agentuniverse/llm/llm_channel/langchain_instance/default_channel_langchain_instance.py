@@ -175,7 +175,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             chunk = chunk.raw
             if not isinstance(chunk, dict):
                 chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
+            if not chunk["choices"]:
                 continue
             choice = chunk["choices"][0]
             chunk = self._convert_delta_to_message_chunk(
