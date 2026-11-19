@@ -36,6 +36,14 @@ class CharacterTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Lazily create and return the underlying LangChain character splitter.
+
+        The splitter is built once from the configured separator, chunk size and
+        chunk overlap, then cached for subsequent accesses.
+
+        Returns:
+            Splitter: The configured LangChain CharacterTextSplitter instance.
+        """
         if not self.__splitter:
             self.__splitter = Splitter(separator=self.separator,
                                  chunk_size=self.chunk_size,
