@@ -1,0 +1,13 @@
+name: 'default_novita_llm'
+description: 'default novita llm powered by the Novita AI open models'
+model_name: 'meta-llama/llama-3.1-70b-instruct'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${NOVITA_API_KEY}'
+api_base: 'https://api.novita.ai/v3/openai'
+proxy: '${NOVITA_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.novita_llm'
+  class: 'NovitaLLM'
