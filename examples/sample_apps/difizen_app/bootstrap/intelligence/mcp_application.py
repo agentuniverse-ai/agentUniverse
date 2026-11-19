@@ -16,6 +16,11 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the agentUniverse core and the MCP server.
+
+        Boots agentUniverse in core mode and launches the MCP server
+        manager so that MCP tools become available.
+        """
         AgentUniverse().start(core_mode=True)
         MCPServerManager().start_server()
 
