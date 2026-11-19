@@ -138,6 +138,8 @@ class ContextSegment(BaseModel):
         Returns:
             bool: True if content changed
         """
+        if new_tokens < 0:
+            raise ValueError("new_tokens must be non-negative")
         new_hash = hashlib.md5(new_content.encode('utf-8')).hexdigest()
 
         if new_hash != self._content_hash:
