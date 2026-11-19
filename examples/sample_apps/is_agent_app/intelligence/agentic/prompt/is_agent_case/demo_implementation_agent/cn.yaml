@@ -11,6 +11,7 @@ instruction: |
      - 用户目标: {user_goal}
      - 当前检查点: {checkpoint_index}/{total_checkpoints}
      - 历史执行记录: {checkpoint_history}
+     - 历史对话: {chat_history}
 
   2. **执行模式判断**:
      - 正常执行模式: 根据用户要求完成当前检查点的任务
