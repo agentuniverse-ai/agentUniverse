@@ -404,6 +404,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _publication_date(cls, article: ElementTree.Element) -> str:
+        """Extract the publication date string of the article from its JournalIssue PubDate element. Args: article (ElementTree.Element): The article element. Returns: str: The publication date, or an empty string when absent."""
         pub_date = article.find(".//Article/Journal/JournalIssue/PubDate")
         if pub_date is None:
             return ""
@@ -419,6 +420,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _publication_types(cls, article: ElementTree.Element) -> List[str]:
+        """Return the non-empty publication type strings of the article. Args: article (ElementTree.Element): The article element. Returns: List[str]: The publication types."""
         return [
             publication_type
             for publication_type in (
@@ -429,6 +431,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _keywords(cls, article: ElementTree.Element) -> List[str]:
+        """Return the non-empty keyword strings of the article. Args: article (ElementTree.Element): The article element. Returns: List[str]: The keywords."""
         return [
             keyword
             for keyword in (
@@ -439,6 +442,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _mesh_terms(cls, article: ElementTree.Element) -> List[Dict[str, Any]]:
+        """Return the MeSH headings of the article with their descriptor UIs and qualifiers. Args: article (ElementTree.Element): The article element. Returns: List[Dict[str, Any]]: The MeSH terms."""
         terms = []
         for heading in article.findall(".//MedlineCitation/MeshHeadingList/MeshHeading"):
             descriptor = heading.find("DescriptorName")
@@ -457,6 +461,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _qualifiers(cls, heading: ElementTree.Element) -> List[Dict[str, Any]]:
+        """Return the qualifiers of a MeSH heading with their UIs and major-topic flags. Args: heading (ElementTree.Element): The MeSH heading element. Returns: List[Dict[str, Any]]: The qualifiers."""
         qualifiers = []
         for qualifier in heading.findall("QualifierName"):
             name = cls._element_text(qualifier)
@@ -473,6 +478,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _languages(cls, article: ElementTree.Element) -> List[str]:
+        """Return the non-empty language strings of the article. Args: article (ElementTree.Element): The article element. Returns: List[str]: The languages."""
         return [
             language
             for language in (
@@ -483,6 +489,7 @@ class PubMedTool(Tool):
 
     @staticmethod
     def _element_text(element: Optional[ElementTree.Element]) -> str:
+        """Return the normalized text of an XML element, collapsing whitespace. Args: element (Optional[ElementTree.Element]): The element. Returns: str: The element text, or an empty string when the element is None."""
         if element is None:
             return ""
         return " ".join("".join(element.itertext()).split())
@@ -500,6 +507,7 @@ class PubMedTool(Tool):
         maxdate: str = "",
         datetype: str = "",
     ) -> Dict[str, Any]:
+        """Build a structured PubMed error result dict. Args: query (str): The failing query. error_type (str): The error type. message (str): The error message. Returns: dict[str, Any]: The error result."""
         return {
             "query": query,
             "max_results": max_results,
