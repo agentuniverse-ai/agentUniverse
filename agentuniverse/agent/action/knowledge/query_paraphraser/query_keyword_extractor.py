@@ -21,6 +21,17 @@ class QueryKeywordExtractor(QueryParaphraser):
     keyword_extractor: Optional[str] = "jieba_keyword_extractor"
 
     def query_paraphrase(self, origin_query: Query) -> Query:
+        """Extract keywords from the query and attach them to it.
+        
+        Runs the configured keyword extractor doc processor over the query text
+        and updates the query's keyword set.
+        
+        Args:
+            origin_query: The original query.
+        
+        Returns:
+            Query: The same query object with keywords added.
+        """
 
         keyword_extractor_instance = DocProcessorManager().get_instance_obj(self.keyword_extractor)
 
