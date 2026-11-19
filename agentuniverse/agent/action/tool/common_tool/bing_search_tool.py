@@ -26,6 +26,14 @@ class BingSearchTool(Tool):
     bing_search_url: Optional[str] = Field(default='https://api.bing.microsoft.com/v7.0/search')
 
     def execute(self, input: str):
+        """Execute a Bing web search for the given query.
+
+        Args:
+            input (str): The query text to search for.
+
+        Returns:
+            str: The web search results for the query.
+        """
         if self.bing_subscription_key is None:
             return MockSearchTool().execute(input)
         query = input
