@@ -1,0 +1,59 @@
+name: template_render_tool
+description: "Template render tool — safe string.Template-based placeholder substitution, pure Python stdlib, no network required. Renders ${name}/$name placeholders from a variables dict with a missing-variable policy (mode='render': strict error listing missing names, keep placeholders as written, or fill from default_value; unused variables reported), lists the placeholder names a template needs (mode='extract'), and validates templates reporting malformed placeholders with line/column position (mode='validate'). '$$' escapes a literal '$'; placeholder_style='brace' offers a $-free {{name}} grammar. Never interprets str.format braces, never evals."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.template_render_tool
+  class: TemplateRenderTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Template mode — render (substitute variables), extract (list placeholder names) or validate (report malformed placeholders with position).
+    required: true
+  template:
+    type: string
+    description: The template text. Required for every mode; the empty string is a valid placeholder-free template.
+    required: false
+  variables:
+    type: object
+    description: Mapping of placeholder name to value for the render mode. Values may be str/int/float/bool and are coerced with str(); keys must be non-empty strings.
+    required: false
+  missing_policy:
+    type: string
+    description: Render mode only — strict (default; structured error payload lists every missing name), keep (leave the placeholder exactly as written) or default (fill from default_value).
+    required: false
+  default_value:
+    type: string
+    description: Render mode only — the fill value for every missing placeholder when missing_policy='default'. Required with that policy; rejected with any other.
+    required: false
+  placeholder_style:
+    type: string
+    description: dollar (default) for ${name}/$name placeholders with $$ escaping, or brace for the $-free {{name}} grammar with {{{{ escaping.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["render", "extract", "validate"]
+      description: Template mode.
+    template:
+      type: string
+      description: The template text (render, extract, validate modes).
+    variables:
+      type: object
+      description: Placeholder name to value mapping (render mode); values are coerced to strings.
+    missing_policy:
+      type: string
+      enum: ["strict", "keep", "default"]
+      description: Policy for variables missing from the mapping (render mode).
+    default_value:
+      type: string
+      description: Fill value for missing placeholders when missing_policy is default (render mode).
+    placeholder_style:
+      type: string
+      enum: ["dollar", "brace"]
+      description: Placeholder grammar — dollar (${name}/$name, $$ escape) or brace ({{name}}, {{{{ escape}).
+  required: ["mode"]
