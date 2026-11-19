@@ -18,13 +18,13 @@ class AuTraceManager:
         self.context_class = context_class or AuTraceContext
         self.context_instance = ContextVar("__au_trace_context__")
 
-    def set_context_class(self, context_class):
+    def set_context_class(self, context_class) -> None:
         self.context_class = context_class
 
-    def recover_trace(self, trace_context):
+    def recover_trace(self, trace_context) -> None:
         self.context_instance.set(trace_context)
 
-    def reset_trace(self):
+    def reset_trace(self) -> None:
         self.context_instance.set(None)
 
     @property
@@ -45,19 +45,19 @@ class AuTraceManager:
             trace_dict["span_id"] = self.trace_context.span_id
         return trace_dict
 
-    def set_session_id(self, session_id):
+    def set_session_id(self, session_id) -> None:
         self.trace_context.set_session_id(session_id)
 
     def get_session_id(self):
         return self.trace_context.session_id
 
-    def set_trace_id(self, trace_id):
+    def set_trace_id(self, trace_id) -> None:
         self.trace_context.set_trace_id(trace_id)
 
     def get_trace_id(self):
         return self.trace_context.trace_id
 
-    def set_span_id(self, span_id):
+    def set_span_id(self, span_id) -> None:
         self.trace_context.set_span_id(span_id)
 
     def get_span_id(self):
@@ -68,7 +68,7 @@ def get_trace_dict() -> dict:
     return AuTraceManager().get_trace_dict()
 
 
-def set_session_id(session_id: str):
+def set_session_id(session_id: str) -> None:
     AuTraceManager().set_session_id(session_id)
 
 
@@ -76,7 +76,7 @@ def get_session_id() -> str | None:
     return AuTraceManager().get_session_id()
 
 
-def set_trace_id(trace_id: str):
+def set_trace_id(trace_id: str) -> None:
     AuTraceManager().set_trace_id(trace_id)
 
 
@@ -84,7 +84,7 @@ def get_trace_id() -> str | None:
     return AuTraceManager().get_trace_id()
 
 
-def set_span_id(span_id: str):
+def set_span_id(span_id: str) -> None:
     AuTraceManager().set_span_id(span_id)
 
 
