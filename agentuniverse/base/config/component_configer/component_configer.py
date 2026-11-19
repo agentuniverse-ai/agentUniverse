@@ -43,6 +43,11 @@ class ComponentConfiger(object):
 
     @metadata_module.setter
     def metadata_module(self, metadata_module: str):
+        """Set the metadata module of the component.
+
+        Args:
+            metadata_module (str): the module path of the component.
+        """
         self.__metadata_module = metadata_module
 
     @property
@@ -52,26 +57,44 @@ class ComponentConfiger(object):
 
     @metadata_class.setter
     def metadata_class(self, metadata_class: str):
+        """Set the metadata class of the component.
+
+        Args:
+            metadata_class (str): the class name of the component.
+        """
         self.__metadata_class = metadata_class
 
     @property
     def yaml_func_instance(self):
+        """Return the yaml function instance of the component."""
         return self.__yaml_func_instance
 
     @yaml_func_instance.setter
     def yaml_func_instance(self, value):
+        """Set the yaml function instance of the component.
+
+        Args:
+            value: the yaml function instance to store.
+        """
         self.__yaml_func_instance = value
 
     @property
     def default_llm_configer(self) -> DefaultLLMConfiger:
+        """Return the default LLM configer of the component."""
         return self.__default_llm_configer
 
     @default_llm_configer.setter
     def default_llm_configer(self, value: DefaultLLMConfiger):
+        """Set the default LLM configer of the component.
+
+        Args:
+            value (DefaultLLMConfiger): the default LLM configer to store.
+        """
         self.__default_llm_configer = value
 
     @property
     def meta_class(self) -> str:
+        """Return the meta class of the component."""
         return self.__meta_class
 
     def load(self) -> 'ComponentConfiger':
