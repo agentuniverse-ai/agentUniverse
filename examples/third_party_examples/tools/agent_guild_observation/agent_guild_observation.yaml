@@ -1,0 +1,11 @@
+name: 'agent_guild_observation'
+description: 'An explicitly invoked public endpoint observation through Agent Guild.'
+transport: 'streamable_http'
+url: 'https://agent-guild-5d5r.onrender.com/mcp'
+server_name: 'agent_guild_observation'
+include:
+  - 'guild_preflight'
+metadata:
+  type: 'TOOLKIT'
+  module: 'agentuniverse.agent.action.toolkit.mcp_toolkit'
+  class: 'MCPToolkit'
