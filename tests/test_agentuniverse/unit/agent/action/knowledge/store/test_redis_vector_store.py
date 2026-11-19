@@ -16,10 +16,15 @@ from agentuniverse.base.config.configer import Configer
 class FakePipeline:
     def __init__(self):
         self.calls = []
+        self.deletions = []
         self.executed = False
 
     def hset(self, key, mapping):
         self.calls.append((key, mapping))
+        return self
+
+    def hdel(self, key, *fields):
+        self.deletions.append((key, fields))
         return self
 
     def execute(self):
@@ -159,6 +164,68 @@ class RedisVectorStoreTest(unittest.TestCase):
         self.assertEqual(mapping["meta_tenant"], "acme")
         self.assertEqual(json.loads(mapping["metadata"]), {"tenant": "acme"})
         self.assertTrue(connection.pipeline_obj.executed)
+        self.assertTrue(connection.transaction)
+        self.assertEqual(connection.pipeline_obj.deletions, [])
+
+    def test_upsert_removes_only_missing_indexed_fields(self):
+        for asynchronous in (False, True):
+            with self.subTest(asynchronous=asynchronous):
+                connection = FakeAsyncConnection() if asynchronous else FakeConnection()
+                store = RedisVectorStore(
+                    **{"async_client" if asynchronous else "client": connection},
+                    dimensions=2,
+                    create_index=False,
+                    filter_tag_fields=["category", "active"],
+                )
+                documents = [
+                    Document(id="partial", metadata={"active": False}, embedding=[1.0, 0.0]),
+                    Document(id="empty", metadata={}, embedding=[1.0, 0.0]),
+                    Document(id="full", metadata={"category": "new", "active": True}, embedding=[1.0, 0.0]),
+                ]
+                if asynchronous:
+                    asyncio.run(store.async_upsert_document(documents))
+                else:
+                    store.upsert_document(documents)
+                self.assertTrue(connection.transaction)
+                self.assertEqual(
+                    connection.pipeline_obj.deletions,
+                    [
+                        ("agentuniverse:document:partial", ("meta_category",)),
+                        ("agentuniverse:document:empty", ("meta_category", "meta_active")),
+                    ],
+                )
+                self.assertEqual(len(connection.pipeline_obj.calls), 3)
+                self.assertEqual(connection.pipeline_obj.calls[0][1]["meta_active"], "false")
+                self.assertTrue(connection.pipeline_obj.executed)
+
+    def test_invalid_metadata_does_not_execute_partial_batch(self):
+        for asynchronous in (False, True):
+            with self.subTest(asynchronous=asynchronous):
+                connection = FakeAsyncConnection() if asynchronous else FakeConnection()
+                store = RedisVectorStore(
+                    **{"async_client" if asynchronous else "client": connection},
+                    dimensions=2,
+                    create_index=False,
+                    filter_tag_fields=["category"],
+                )
+                documents = [
+                    Document(id="valid", metadata={}, embedding=[1.0, 0.0]),
+                    Document(id="invalid", metadata={"category": []}, embedding=[1.0, 0.0]),
+                ]
+                with self.assertRaisesRegex(TypeError, "must be a scalar"):
+                    if asynchronous:
+                        asyncio.run(store.async_upsert_document(documents))
+                    else:
+                        store.upsert_document(documents)
+                self.assertFalse(connection.pipeline_obj.executed)
+
+    def test_empty_upsert_does_not_contact_redis(self):
+        connection = FakeConnection()
+        store = RedisVectorStore(client=connection, async_client=connection)
+        store.upsert_document([])
+        asyncio.run(store.async_upsert_document([]))
+        self.assertEqual(connection.calls, [])
+        self.assertFalse(connection.pipeline_obj.executed)
 
     def test_delete_uses_prefixed_key(self):
         connection = FakeConnection()
