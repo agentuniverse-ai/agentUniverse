@@ -28,15 +28,38 @@ DEFAULT_GUNICORN_CONFIG = {
 
 # Execute all func in the queue after fork chile process.
 def post_fork(server, worker):
+    """Run all functions queued for the forked worker process.
+
+    Args:
+        server (object): the gunicorn server instance.
+        worker (object): the gunicorn worker instance.
+    """
     for _func, args, kwargs in POST_FORK_QUEUE:
         _func(*args, **kwargs)
 
 
 class ContextVarResetMiddleware:
+    """WSGI middleware that resets framework contexts after each request.
+
+    Clears all framework contexts and resets the active trace once the
+    wrapped application has finished handling the request.
+    """
     def __init__(self, app):
+        """Wrap a WSGI application with the context-reset middleware.
+
+        Args:
+            app (object): the WSGI application to wrap.
+        """
         self.app = app
 
     def __call__(self, environ, start_response):
+        """Handle a request and clear framework contexts afterwards.
+        Args:
+            environ (dict): the WSGI environ dict.
+            start_response (callable): the WSGI start_response callable.
+        Returns:
+            Any: the response iterable from the wrapped application.
+        """
         try:
             return self.app(environ, start_response)
         finally:
@@ -46,6 +69,14 @@ class ContextVarResetMiddleware:
 class GunicornApplication(BaseApplication):
     """Use gunicorn to wrap the flask web server."""
     def __init__(self, config_path: str = None):
+        """Initialize the gunicorn application for the flask web server.
+
+        Loads options from the TOML config file when a config_path is given
+        and wraps the flask app with the ContextVarResetMiddleware.
+
+        Args:
+            config_path (str): optional path to a gunicorn config file.
+        """
         self.options = {}
         if config_path:
             self.__load_config_from_file(config_path)
@@ -76,10 +107,20 @@ class GunicornApplication(BaseApplication):
         self.cfg.set('post_fork', post_fork)
 
     def update_config(self, options: dict):
+        """Update the gunicorn options and reload the configuration.
+
+        Args:
+            options (dict): gunicorn option overrides to apply.
+        """
         self.options = options
         self.load_config()
 
     def load(self):
+        """Return the flask application to serve.
+
+        Returns:
+            object: the flask application instance.
+        """
         return self.application
 
     def __load_config_from_file(self, config_path: str):
