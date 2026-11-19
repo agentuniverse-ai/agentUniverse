@@ -1,0 +1,15 @@
+name: 'metadata_filter'
+description: 'filter recalled documents by metadata conditions'
+conditions:
+  - field: 'tenant_id'
+    operator: 'eq'
+    value: 'tenant-a'
+  - field: 'language'
+    operator: 'in'
+    value: ['en', 'zh']
+match_mode: 'all'
+missing: 'exclude'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.metadata_filter'
+  class: 'MetadataFilter'
