@@ -18,17 +18,22 @@ from langchain_core.outputs import GenerationChunk
 
 
 class LangChainInstance(LangChainLLM):
+    """A langchain LLM adapter that forwards call and stream operations to a
+    wrapped agentUniverse LLM.
+    """
     llm: LLM = None
     llm_type: str = "AgentUniverse"
     streaming: bool = False
 
     def __init__(self, llm: LLM, llm_type: str, **kwargs):
+        """Store the wrapped LLM and llm_type before initializing the langchain base."""
         super().__init__(**kwargs)
         self.llm = llm
         self.llm_type = llm_type
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None,
               run_manager: Optional[CallbackManagerForLLMRun] = None, **kwargs: Any) -> str:
+        """Synchronously call the wrapped LLM with the prompt and return the text output."""
         should_stream = kwargs.pop("streaming", False) if "streaming" in kwargs else self.streaming
         llm_output = self.llm.call(prompt=prompt, stop=stop, **kwargs)
         if not should_stream:
@@ -42,6 +47,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> str:
+        """Asynchronously call the wrapped LLM with the prompt and return the text output."""
         should_stream = kwargs.pop("streaming", False) if "streaming" in kwargs else self.streaming
         llm_output = await self.llm.acall(prompt=prompt, stop=stop, **kwargs)
         if not should_stream:
@@ -55,6 +61,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> Iterator[GenerationChunk]:
+        """Yield GenerationChunk outputs produced by streaming the wrapped LLM."""
         kwargs['stream'] = True
         llm_output = self.llm.call(prompt=prompt, stop=stop, **kwargs)
         for line in llm_output:
@@ -67,6 +74,7 @@ class LangChainInstance(LangChainLLM):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> AsyncIterator[GenerationChunk]:
+        """Asynchronously yield GenerationChunk outputs produced by streaming the wrapped LLM."""
         kwargs['stream'] = True
         llm_output = await self.llm.acall(prompt=prompt, stop=stop, **kwargs)
         async for line in llm_output:
