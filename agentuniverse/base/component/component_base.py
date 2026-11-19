@@ -18,6 +18,8 @@ class ComponentBase(BaseModel):
     """The ComponentBase class, which is used to define the base class of the component."""
 
     component_type: ComponentEnum
+    # Human-readable component name used by configuration and instance codes.
+    name: Optional[str] = None
     # component yaml path
     component_config_path: Optional[str] = None
 
