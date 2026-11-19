@@ -299,6 +299,8 @@ class RamContextStore(ContextStore):
         for segment_id in segment_ids:
             if segment_id in session_storage:
                 segment = session_storage[segment_id]
+                if self._is_expired(segment):
+                    continue
                 segment.mark_accessed()
                 session_storage.move_to_end(segment_id)  # LRU update
                 segments.append(segment)
