@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 
 class MessageDO(BaseModel):
+    """Messagedo.
+    """
     id: Optional[int] = Field(description="ID", default=None)
     session_id: str = Field(description="Session id")
     ext_info: Optional[dict] = Field(description="Message ext info.", default={})
