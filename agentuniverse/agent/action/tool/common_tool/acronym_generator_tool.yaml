@@ -1,0 +1,65 @@
+name: acronym_generator_tool
+description: Acronym generator tool — pure Python stdlib, no network required. Build an acronym from a phrase with stopword skipping, minimum word length and capped word-count options plus three letter styles (mode='generate', 'HyperText Markup Language' -> HTML), enumerate all reasonable acronym variants of a phrase as a labelled list (mode='variants'), or derive a compact system-name acronym from a multi-word name with a documented consonant fallback (mode='from_name').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.acronym_generator_tool
+  class: AcronymGeneratorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — generate, variants or from_name.
+    required: true
+  phrase:
+    type: string
+    description: The source phrase. Required for the generate and variants modes.
+    required: false
+  skip_stopwords:
+    type: boolean
+    description: Skip the built-in English stopword parts (generate mode, default true).
+    required: false
+  min_word_length:
+    type: integer
+    description: Drop words shorter than this length (generate mode, default 0).
+    required: false
+  max_words:
+    type: integer
+    description: Cap on the number of eligible words that contribute letters; at most 10, larger values are clamped with a note (generate mode, default no explicit limit).
+    required: false
+  style:
+    type: string
+    description: Letter style — upper (default), keep_case or first_letters_lower.
+    required: false
+  name:
+    type: string
+    description: The multi-word name to shorten. Required for the from_name mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["generate", "variants", "from_name"]
+      description: Operation mode.
+    phrase:
+      type: string
+      description: Source phrase (generate and variants modes).
+    skip_stopwords:
+      type: boolean
+      description: Skip the built-in English stopword parts (generate mode).
+    min_word_length:
+      type: integer
+      description: Drop words shorter than this length (generate mode).
+    max_words:
+      type: integer
+      description: Cap on contributing words, itself capped at 10 (generate mode).
+    style:
+      type: string
+      enum: ["upper", "keep_case", "first_letters_lower"]
+      description: Letter style for the generated initials.
+    name:
+      type: string
+      description: Multi-word name to shorten (from_name mode).
+  required: ["mode"]
