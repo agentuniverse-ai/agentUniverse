@@ -20,6 +20,15 @@ class ThreadWithReturnValue(Thread):
 
     def __init__(self, group=None, target=None, name=None,
                  args=(), kwargs=None):
+        """Initialize the thread and snapshot the current context.
+
+        Args:
+            group: Thread group (reserved for future use).
+            target: Callable to invoke when the thread runs.
+            name: Thread name.
+            args: Positional arguments passed to the target.
+            kwargs: Keyword arguments passed to the target.
+        """
         super().__init__(group, target, name, args, kwargs)
 
         if kwargs is None:
@@ -57,6 +66,7 @@ class ContextAwareFuture(Future):
     """A Future that can store context and error information."""
 
     def __init__(self):
+        """Initialize the future with empty error and context state."""
         super().__init__()
         self.error = None
         self._context_pack = None
@@ -72,6 +82,7 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
         future._context_pack = context_pack
 
         def context_wrapper():
+            """Run the submitted callable and publish its result on the future."""
             otel_token = None
             try:
                 otel_token = ContextCoordinator.recover_context(context_pack)
@@ -96,6 +107,7 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
         context_pack = ContextCoordinator.save_context()
 
         def context_aware_func(*args):
+            """Invoke the mapped function with the preserved context restored."""
             otel_token = None
             try:
                 otel_token = ContextCoordinator.recover_context(context_pack)
