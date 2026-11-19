@@ -1,0 +1,30 @@
+name: 'instruction_extractor'
+description: 'find imperative instruction / action sentences and stamp them into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.instruction_extractor'
+  class: 'InstructionExtractor'
+
+# Maximum number of instruction hits kept in metadata['instructions'];
+# the instruction_count metadata is always the uncapped total. Must be >= 0.
+max_instructions: 100
+
+# Minimum number of words (whitespace tokens containing at least one
+# alphanumeric character) for a segment to count as a sentence; segments
+# below the threshold are ignored entirely. Must be >= 1.
+min_words: 1
+
+# Number of sentences living in numbered-step context required for
+# metadata['has_procedure'] to become True. Must be >= 1.
+procedure_threshold: 3
+
+# Metadata key the (capped) hit list is written to; '' disables stamping.
+instructions_key: 'instructions'
+
+# Metadata key the uncapped instruction count is written to;
+# '' disables stamping.
+count_key: 'instruction_count'
+
+# Metadata key the has-procedure flag is written to; '' disables stamping.
+has_procedure_key: 'has_procedure'
