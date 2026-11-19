@@ -16,6 +16,7 @@ class PeerAgentTest(unittest.TestCase):
     """Test cases for the peer agent"""
 
     def setUp(self) -> None:
+        """Start AgentUniverse with the demo configuration before each test."""
         AgentUniverse().start(config_path='../../config/config.toml')
 
     def test_peer_agent(self):
