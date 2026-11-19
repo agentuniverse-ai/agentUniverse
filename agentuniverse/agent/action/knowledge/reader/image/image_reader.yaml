@@ -5,7 +5,6 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.reader.image.image_reader'
   class: 'ImageReader'
 
-default_symbol: true
 languages:
   - "en"
   - "ch_sim"
