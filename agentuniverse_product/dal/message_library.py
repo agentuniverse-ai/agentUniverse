@@ -35,6 +35,12 @@ class MessageORM(Base):
 
 @singleton
 class MessageLibrary:
+    """Provides database access for chat messages.
+
+    Adds, deletes and queries messages stored in the `message` table,
+    converting between MessageORM and MessageDO objects.
+    """
+
     @staticmethod
     def get_db_session():
         """Get the database session."""
