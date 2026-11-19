@@ -1,0 +1,51 @@
+name: phone_format_tool
+description: Phone format tool — pure Python stdlib, no network required. Normalize one number to E.164 (+8613812345678), a spaced display variant (+86 138 1234 5678) or the domestic national form via a documented ~20-region dial-code table (mode='format'), classify an international number's region with longest-prefix matching and loose ITU E.164 bounds (mode='classify'), or extract phone-shaped substrings from free text with date/arithmetic guards and format each of them (mode='extract').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.phone_format_tool
+  class: PhoneFormatTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — format, classify or extract.
+    required: true
+  phone:
+    type: string
+    description: The phone number for the format and classify modes; separators (spaces, dashes, dots, parentheses) are stripped.
+    required: false
+  text:
+    type: string
+    description: The text to scan for phone-shaped substrings; extract mode only.
+    required: false
+  default_region:
+    type: string
+    description: Two-letter region code (CN, GB, US, ...) used to interpret national/bare input in format mode and bare candidates in extract mode; ignored for numbers that already carry + or 00.
+    required: false
+  output:
+    type: string
+    description: format mode only — e164 (default, +8613812345678), display (+86 138 1234 5678) or national (domestic form via the region table's trunk prefix).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["format", "classify", "extract"]
+      description: Operation mode.
+    phone:
+      type: string
+      description: Phone number to format / classify (format, classify modes).
+    text:
+      type: string
+      description: Text to scan for phone numbers (extract mode).
+    default_region:
+      type: string
+      description: Two-letter region code for national/bare input (format, extract modes).
+    output:
+      type: string
+      enum: ["e164", "display", "national"]
+      description: Output form (format mode).
+  required: ["mode"]
