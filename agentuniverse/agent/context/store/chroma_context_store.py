@@ -56,6 +56,15 @@ class ChromaContextStore(ContextStore):
         self._collection = None
         self._embedding_function = None
 
+    def _initialize_by_component_configer(self, component_configer) -> 'ChromaContextStore':
+        """Load Chroma options before client and embedding initialization."""
+        super()._initialize_by_component_configer(component_configer)
+        for name in ("collection_name", "embedding_model_name", "persist_directory",
+                     "similarity_threshold"):
+            if hasattr(component_configer, name):
+                setattr(self, name, getattr(component_configer, name))
+        return self
+
     def initialize_by_component_configer(self, component_configer) -> 'ChromaContextStore':
         """Initialize from YAML configuration."""
         super().initialize_by_component_configer(component_configer)

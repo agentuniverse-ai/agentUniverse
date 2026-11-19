@@ -58,6 +58,15 @@ class RedisContextStore(ContextStore):
         super().__init__(**kwargs)
         self._redis = None
 
+    def _initialize_by_component_configer(self, component_configer) -> 'RedisContextStore':
+        """Load Redis options before the public initializer connects."""
+        super()._initialize_by_component_configer(component_configer)
+        for name in ("redis_host", "redis_port", "redis_db", "redis_password",
+                     "key_prefix", "default_ttl_seconds"):
+            if hasattr(component_configer, name):
+                setattr(self, name, getattr(component_configer, name))
+        return self
+
     def initialize_by_component_configer(self, component_configer) -> 'RedisContextStore':
         """Initialize from YAML configuration."""
         super().initialize_by_component_configer(component_configer)

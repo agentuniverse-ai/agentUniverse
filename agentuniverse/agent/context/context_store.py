@@ -37,6 +37,15 @@ class ContextStore(ComponentBase):
     enable_metrics: bool = False
     _metrics: Dict[str, Any] = {}
 
+    def _initialize_by_component_configer(self, component_configer) -> 'ContextStore':
+        """Load shared storage options, including explicit zero/false values."""
+        for name in ("name", "storage_tier", "max_segments", "ttl_hours", "enable_metrics"):
+            if hasattr(component_configer, name):
+                setattr(self, name, getattr(component_configer, name))
+        if self.enable_metrics and not self._metrics:
+            self.initialize_metrics()
+        return self
+
     def initialize_metrics(self) -> None:
         """Initialize performance metrics tracking."""
         self._metrics = {
