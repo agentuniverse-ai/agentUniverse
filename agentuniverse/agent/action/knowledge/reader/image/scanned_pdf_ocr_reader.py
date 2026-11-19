@@ -74,8 +74,10 @@ class ScannedPdfOCRReader(Reader):
         # Convert PDF page to image
         try:
             from pdf2image import convert_from_path  # type: ignore
-        except Exception:
-            raise ImportError("pdf2image is required: `pip install pdf2image`. Also install poppler.")
+        except Exception as e:
+            raise ImportError(
+                "pdf2image is required: `pip install pdf2image`. Also install poppler."
+            ) from e
 
         logger.debug("ScannedPdfOCRReader converting PDF page to image")
         images = convert_from_path(str(file), first_page=page_index + 1, last_page=page_index + 1)
