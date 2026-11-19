@@ -190,6 +190,16 @@ class Planner(ComponentBase):
     def invoke_chain(self, agent_model: AgentModel, chain: RunnableSerializable[Any, str], planner_input: dict,
                      chat_history,
                      input_object: InputObject):
+        """Invoke a planner chain, streaming tokens to the output stream when present.
+        
+        If the input object carries an output stream, the chain is streamed and
+        each token is pushed to the stream and the joined text is returned;
+        otherwise the chain is invoked in a single call and its result returned.
+        
+        Returns:
+            The chain result: the raw invoke result, or the joined streamed
+            token string when streaming.
+        """
 
         if not input_object.get_data('output_stream'):
             res = chain.invoke(input=planner_input, config={"configurable": {"session_id": "unused"}})
