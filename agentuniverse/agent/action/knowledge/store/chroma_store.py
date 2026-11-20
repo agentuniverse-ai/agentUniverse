@@ -70,6 +70,32 @@ class ChromaStore(Store):
             )
         return client
 
+    def _get_embedding_model(self) -> Any:
+        """Return the configured embedding component.
+
+        The lookup keeps the historical ``AttributeError`` type so callers that
+        already handle a failed embedding lookup are not broken. Only the
+        failure message is enriched with the store, field and config path.
+
+        Raises:
+            AttributeError: If ``embedding_model`` is configured but its
+                ``EMBEDDING`` component is not registered.
+        """
+        embedding_model = EmbeddingManager().get_instance_obj(self.embedding_model)
+        if embedding_model is None:
+            config_path = (
+                f" (config: {self.component_config_path})"
+                if self.component_config_path else ""
+            )
+            raise AttributeError(  # noqa: TRY003 - message carries config context
+                f"{type(self).__name__} '{self.name or '<unnamed>'}' could not "
+                f"resolve embedding_model '{self.embedding_model}'{config_path}: "
+                f"EMBEDDING component is not registered. Check the store's "
+                f"'embedding_model' setting and load that component's "
+                f"configuration before using the store."
+            )
+        return embedding_model
+
     def query(self, query: Query, **kwargs) -> List[Document]:
         """Query the chroma collection with the given query and return the top k results.
 
@@ -87,9 +113,8 @@ class ChromaStore(Store):
 
         embedding = query.embeddings
         if self.embedding_model is not None and len(embedding) == 0:
-            embedding = EmbeddingManager().get_instance_obj(
-                self.embedding_model
-            ).get_embeddings([query.query_str], text_type="query")[0]
+            embedding = self._get_embedding_model().get_embeddings(
+                [query.query_str], text_type="query")[0]
         if len(embedding) > 0:
             query_result = self.collection.query(
                 n_results=query.similarity_top_k if query.similarity_top_k else self.similarity_top_k,
@@ -118,9 +143,8 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = self._get_embedding_model().get_embeddings(
+                    [document.text])[0]
             self.collection.add(
                 documents=[document.text],
                 metadatas=[document.metadata],
@@ -133,9 +157,8 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = self._get_embedding_model().get_embeddings(
+                    [document.text])[0]
             self.collection.upsert(
                 documents=[document.text],
                 metadatas=[document.metadata],
@@ -148,9 +171,8 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = self._get_embedding_model().get_embeddings(
+                    [document.text])[0]
             self.collection.update(
                 documents=[document.text],
                 metadatas=[document.metadata],
