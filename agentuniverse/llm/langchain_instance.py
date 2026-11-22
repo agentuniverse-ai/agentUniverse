@@ -34,7 +34,7 @@ class LangchainOpenAI(ChatOpenAI):
             llm (LLM): the agentUniverse(aU) LLM instance.
         """
         init_params = dict()
-        init_params['model_name'] = llm.model_name if llm.model_name else 'gpt-3.5-turbo'
+        init_params['model_name'] = llm.model_name if llm.model_name else 'gpt-4o'
         init_params['temperature'] = llm.temperature if llm.temperature else 0.7
         init_params['request_timeout'] = llm.request_timeout
         init_params['max_tokens'] = llm.max_tokens
