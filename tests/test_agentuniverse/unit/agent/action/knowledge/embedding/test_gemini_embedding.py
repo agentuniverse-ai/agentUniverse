@@ -16,7 +16,7 @@ class GeminiEmbeddingTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.embedding = GeminiEmbedding(embedding_model_name='text-embedding-004',
+        self.embedding = GeminiEmbedding(embedding_model_name='gemini-embedding-001',
                                          embedding_dims=768,
                                          gemini_api_key='xxxxxxx')
         # Gemini does not have a native proxy solution.
