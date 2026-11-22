@@ -1,6 +1,6 @@
 name: 'gemini_embedding'
 description: 'embedding use gemini'
-embedding_model_name: 'text-embedding-004'
+embedding_model_name: 'gemini-embedding-001'
 metadata:
   type: 'EMBEDDING'
   module: 'agentuniverse.agent.action.knowledge.embedding.gemini_embedding'

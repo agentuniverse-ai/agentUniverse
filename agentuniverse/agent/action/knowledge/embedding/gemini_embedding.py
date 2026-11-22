@@ -16,6 +16,18 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 # @mail : wozhapen@gmail.com
 # @FileName :gemini_embedding.py
 
+# text-embedding-004 was shut down on 2026-01-14. gemini-embedding-001 returns one
+# embedding per input and accepts output_dimensionality.
+DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
+DEFAULT_GEMINI_EMBEDDING_DIMS = 768
+GEMINI_NATIVE_EMBEDDING_DIMS = 3072
+
+
+def _l2_normalized(values: List[float]) -> List[float]:
+    norm = sum(v * v for v in values) ** 0.5
+    return [v / norm for v in values] if norm else list(values)
+
+
 class GeminiEmbedding(Embedding):
     """Gemini Embedding class that inherits from the base Embedding class."""
 
@@ -35,16 +47,23 @@ class GeminiEmbedding(Embedding):
                     "genai is required. Install with: pip install google-genai"
                 ) from e
             
-        model_name = self.embedding_model_name or "text-embedding-004"  # default model
+        from google.genai import types
+
+        model_name = self.embedding_model_name or DEFAULT_GEMINI_EMBEDDING_MODEL
+        dims = self.embedding_dims or DEFAULT_GEMINI_EMBEDDING_DIMS
 
         try:
             response = self.client.models.embed_content(
                 model=model_name,
                 contents=texts,
-                # gemini default 768, and only support 768
-                # config=EmbedContentConfig(output_dimensionality=(self.embedding_dims or 768))
+                config=types.EmbedContentConfig(output_dimensionality=dims),
             )
-            return [embedding.values for embedding in response.embeddings]
+            vectors = [embedding.values for embedding in response.embeddings]
+            if dims == GEMINI_NATIVE_EMBEDDING_DIMS:
+                return vectors
+            # Truncated gemini-embedding-001 vectors are not unit length; Google asks
+            # callers to normalize them for cosine/dot-product similarity.
+            return [_l2_normalized(values) for values in vectors]
         except Exception as e:
             print(f"Error generating embedding for text: {texts}. Error: {e}")
             # Handle the error appropriately, e.g., return a zero vector or raise an exception
