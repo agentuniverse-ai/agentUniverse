@@ -21,7 +21,7 @@ class DefaultMemory(ChatMemory):
 
         Args:
             llm (LLM): the LLM instance used by this memory.
-            default memory uses OpenAILLM(gpt-3.5-turbo) object as the memory llm.
+            default memory uses DefaultOpenAILLM(gpt-4o) object as the memory llm.
         """
         super().__init__(**kwargs)
         self.llm = DefaultOpenAILLM(model_name="gpt-4o")
