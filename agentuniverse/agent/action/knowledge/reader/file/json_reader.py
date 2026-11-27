@@ -12,7 +12,7 @@ from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encodi
 
 
 class JsonReader(Reader):
-    """JSON file reader."""
+    """Read UTF-8, UTF-16, UTF-32 and locally encoded JSON files."""
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
         """Parse the JSON file.
@@ -36,8 +36,11 @@ class JsonReader(Reader):
         if not file.exists():
             raise FileNotFoundError(f"JSON file not found: {file}")
 
-        # Detect file encoding for proper reading
-        encoding = detect_file_encoding(file)
+        # JSON signatures distinguish UTF-16/32 even without a byte-order mark.
+        with file.open("rb") as stream:
+            encoding = json.detect_encoding(stream.read(4))
+        if encoding == "utf-8":
+            encoding = detect_file_encoding(file)
 
         # Read and parse JSON file
         with open(file, 'r', encoding=encoding) as f:
